@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import Plasma from '../components/Plasma'
 
 export default function Login() {
   const [error, setError] = useState(null)
@@ -9,29 +10,44 @@ export default function Login() {
     setGoogleLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error: signInError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: window.location.origin + '/auth/callback',
       },
     })
 
-    if (error) {
+    if (signInError) {
       setError('Error al iniciar sesión con Google')
       setGoogleLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
+      <div className="absolute inset-0 -z-10">
+        <Plasma
+          color="#6659ff"
+          speed={0.6}
+          direction="forward"
+          scale={2}
+          opacity={0.8}
+          mouseInteractive={true}
+        />
+      </div>
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-semibold text-zinc-100 mb-8 text-center">Iniciar sesión</h1>
+        <div className="text-center mb-8">
+          <h1 className="text-5xl font-bold text-zinc-100 tracking-tight mb-4">KnowMe</h1>
+          <p className="text-zinc-400 text-sm">
+            Conectate con tus amigos, conocé gente nueva y conversá en tiempo real, el tiempo que quieras.
+          </p>
+        </div>
         {error && <p className="text-red-400 text-sm text-center mb-4">{error}</p>}
         <button
           type="button"
           onClick={handleGoogle}
           disabled={googleLoading}
-          className="w-full border border-zinc-800 text-zinc-300 rounded-lg py-2 font-medium hover:bg-zinc-900 transition disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full bg-white text-zinc-950 rounded-xl py-2.5 font-semibold hover:bg-zinc-200 transition disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
@@ -41,6 +57,9 @@ export default function Login() {
           </svg>
           {googleLoading ? 'Conectando...' : 'Continuar con Google'}
         </button>
+        <p className="text-zinc-400 text-xs text-center mt-8 leading-relaxed">
+          Al continuar aceptás los términos y la política de privacidad.
+        </p>
       </div>
     </div>
   )

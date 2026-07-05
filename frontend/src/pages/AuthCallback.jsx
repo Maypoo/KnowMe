@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { api } from '../lib/api'
 
 export default function AuthCallback() {
   const navigate = useNavigate()
@@ -15,9 +16,8 @@ export default function AuthCallback() {
         return
       }
 
-      const res = await fetch('/api/auth/google', {
+      const res = await api('/api/auth/google', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           access_token: session.access_token,
           refresh_token: session.refresh_token,

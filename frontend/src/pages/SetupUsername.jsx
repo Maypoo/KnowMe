@@ -1,13 +1,18 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { api } from '../lib/api'
+import Avatar from '../components/Avatar'
 
 export default function SetupUsername() {
   const navigate = useNavigate()
   const location = useLocation()
   const email = location.state?.email || ''
   const [username, setUsername] = useState('')
+  const [avatarPreview, setAvatarPreview] = useState(null)
+  const [avatarFile, setAvatarFile] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+  const fileInputRef = useRef(null)
 
   const handleUsernameChange = (e) => {
     const value = e.target.value
@@ -20,22 +25,48 @@ export default function SetupUsername() {
     }
   }
 
+  const handleAvatarSelect = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type)) {
+      setError('Formato no soportado. Usá PNG, JPG, GIF o WebP.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      setAvatarPreview(reader.result)
+      setAvatarFile(file)
+      setError(null)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemoveAvatar = () => {
+    setAvatarPreview(null)
+    setAvatarFile(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError(null)
 
-    if (!username.startsWith('@') || username.length < 2 || !/^@[a-zA-Z0-9_]+$/.test(username)) {
-      setError('Elegí un nombre de usuario válido (mínimo 2 caracteres, solo letras, números y guión bajo)')
+    if (!username.startsWith('@') || username.length < 2 || username.length > 20 || !/^@[a-zA-Z0-9_]+$/.test(username)) {
+      setError('Elegí un nombre de usuario válido (entre 2 y 20 caracteres, solo letras, números y guión bajo)')
       return
     }
 
     setLoading(true)
 
     try {
-      const res = await fetch('/api/auth/setup-username', {
+      const body = { username }
+      if (avatarPreview) body.avatar = avatarPreview
+
+      const res = await api('/api/auth/setup-username', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify(body),
       })
 
       const data = await res.json()
@@ -58,7 +89,39 @@ export default function SetupUsername() {
       <div className="w-full max-w-sm">
         <h1 className="text-2xl font-semibold text-zinc-100 mb-2 text-center">Elegí tu nombre de usuario</h1>
         <p className="text-zinc-500 text-sm text-center mb-8">{email}</p>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="flex flex-col items-center gap-3">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="relative group"
+            >
+              <Avatar src={avatarPreview} size={80} className="ring-2 ring-zinc-700 group-hover:ring-zinc-500 transition" />
+              <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                <span className="text-xs text-zinc-200 font-medium">{avatarPreview ? 'Cambiar' : 'Subir'}</span>
+              </div>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              onChange={handleAvatarSelect}
+              className="hidden"
+            />
+            {avatarPreview && (
+              <button
+                type="button"
+                onClick={handleRemoveAvatar}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition"
+              >
+                Quitar foto
+              </button>
+            )}
+            {!avatarPreview && (
+              <p className="text-xs text-zinc-500">Foto de perfil (opcional)</p>
+            )}
+          </div>
+
           <div>
             <label htmlFor="username" className="block text-sm text-zinc-400 mb-1">Nombre de usuario</label>
             <input
