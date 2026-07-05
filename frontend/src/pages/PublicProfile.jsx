@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import Avatar from '../components/Avatar'
+import FollowersList from '../components/FollowersList'
+import FriendsListModal from '../components/FriendsListModal'
 
 export default function PublicProfile() {
   const { username } = useParams()
@@ -10,6 +12,8 @@ export default function PublicProfile() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [showFollowers, setShowFollowers] = useState(false)
+  const [showFriends, setShowFriends] = useState(false)
 
   useEffect(() => {
     if (!username.startsWith('@')) {
@@ -126,9 +130,19 @@ export default function PublicProfile() {
               </p>
             )}
             <div className="flex items-center justify-center gap-4 mt-3 text-sm">
-              <span className="text-zinc-400">{profile.follower_count} seguidores</span>
+              <button
+                onClick={() => setShowFollowers(true)}
+                className="text-zinc-400 hover:text-zinc-200 transition"
+              >
+                {profile.follower_count} seguidores
+              </button>
               <span className="text-zinc-600">·</span>
-              <span className="text-zinc-400">{profile.friend_count} amigos</span>
+              <button
+                onClick={() => setShowFriends(true)}
+                className="text-zinc-400 hover:text-zinc-200 transition"
+              >
+                {profile.friend_count} amigos
+              </button>
             </div>
           </div>
 
@@ -186,6 +200,12 @@ export default function PublicProfile() {
           )}
         </div>
       </div>
+      {showFollowers && (
+        <FollowersList username={profile.username} onClose={() => setShowFollowers(false)} />
+      )}
+      {showFriends && (
+        <FriendsListModal username={profile.username} onClose={() => setShowFriends(false)} />
+      )}
     </div>
   )
 }

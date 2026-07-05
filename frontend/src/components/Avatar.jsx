@@ -21,7 +21,6 @@ export default function Avatar({ src, alt = '', size = 36, className = '' }) {
     <img
       src={src}
       alt={alt}
-      key={src}
       className={`rounded-full object-cover flex-shrink-0 ${className}`}
       style={{ width: size, height: size }}
       onError={() => setError(true)}

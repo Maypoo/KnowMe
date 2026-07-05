@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser'
 import rateLimit from 'express-rate-limit'
 import auth from './middleware/auth.js'
 import { supabase } from './lib/supabase.js'
+import sharp from 'sharp'
 import { setupSocket, getIO } from './src/socket.js'
 
 const asyncHandler = (fn) => (req, res, next) => {
@@ -103,9 +104,6 @@ async function uploadAvatar(userId, base64) {
   const matches = base64.match(/^data:image\/(png|jpeg|gif|webp);base64,(.+)$/)
   if (!matches) return null
 
-  const buffer = Buffer.from(matches[2], 'base64')
-  const filePath = `${userId}/avatar`
-
   const { data: files } = await supabase.storage
     .from('avatars')
     .list(userId)
@@ -115,10 +113,23 @@ async function uploadAvatar(userId, base64) {
     await supabase.storage.from('avatars').remove(paths)
   }
 
+  const filePath = `${userId}/avatar_${Date.now()}.webp`
+
+  let webpBuffer
+  try {
+    webpBuffer = await sharp(Buffer.from(matches[2], 'base64'))
+      .resize(200, 200, { fit: 'cover' })
+      .webp()
+      .toBuffer()
+  } catch {
+    return null
+  }
+
   const { error: uploadError } = await supabase.storage
     .from('avatars')
-    .upload(filePath, buffer, {
-      contentType: `image/${matches[1]}`,
+    .upload(filePath, webpBuffer, {
+      contentType: 'image/webp',
+      cacheControl: 'public, max-age=31536000',
       upsert: true,
     })
 
@@ -128,7 +139,7 @@ async function uploadAvatar(userId, base64) {
     .from('avatars')
     .getPublicUrl(filePath)
 
-  return `${publicUrl}?t=${Date.now()}`
+  return publicUrl
 }
 
 function setSessionCookies(res, session) {
@@ -734,7 +745,25 @@ app.post('/api/avatar', auth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Error al actualizar el perfil' })
   }
 
-  res.json({ profile })
+  const [{ count: followerCount }, { count: followingCount }] = await Promise.all([
+    supabase.from('followers').select('*', { count: 'exact', head: true }).eq('following_id', profile.id),
+    supabase.from('followers').select('*', { count: 'exact', head: true }).eq('follower_id', profile.id),
+  ])
+
+  const { count: friendCount } = await supabase
+    .from('friend_requests')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'accepted')
+    .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`)
+
+  res.json({
+    profile: {
+      ...profile,
+      follower_count: followerCount || 0,
+      following_count: followingCount || 0,
+      friend_count: friendCount || 0,
+    },
+  })
 }))
 
 app.post('/api/follow/:username', auth, asyncHandler(async (req, res) => {
@@ -794,6 +823,93 @@ app.delete('/api/follow/:username', auth, asyncHandler(async (req, res) => {
   }
 
   res.json({ message: 'Dejaste de seguir al usuario' })
+}))
+
+app.get('/api/followers/:username', auth, asyncHandler(async (req, res) => {
+  const { username } = req.params
+  const sanitized = sanitize(username)
+
+  const { data: target } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('username', sanitized)
+    .maybeSingle()
+
+  if (!target) {
+    return res.status(404).json({ error: 'Usuario no encontrado' })
+  }
+
+  const { data: followerRows, error: followerError } = await supabase
+    .from('followers')
+    .select('follower_id')
+    .eq('following_id', target.id)
+    .order('created_at', { ascending: false })
+
+  if (followerError) {
+    return res.status(400).json({ error: 'Error al obtener seguidores' })
+  }
+
+  if (followerRows.length === 0) {
+    return res.json({ followers: [] })
+  }
+
+  const followerIds = followerRows.map(f => f.follower_id)
+
+  const { data: profiles, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, username, avatar_url')
+    .in('id', followerIds)
+
+  if (profileError) {
+    return res.status(400).json({ error: 'Error al obtener perfiles' })
+  }
+
+  const idOrder = followerIds
+  profiles.sort((a, b) => idOrder.indexOf(a.id) - idOrder.indexOf(b.id))
+
+  res.json({ followers: profiles })
+}))
+
+app.get('/api/friends/:username', auth, asyncHandler(async (req, res) => {
+  const { username } = req.params
+  const sanitized = sanitize(username)
+
+  const { data: target } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('username', sanitized)
+    .maybeSingle()
+
+  if (!target) {
+    return res.status(404).json({ error: 'Usuario no encontrado' })
+  }
+
+  const { data: sent } = await supabase
+    .from('friend_requests')
+    .select('receiver_id')
+    .eq('sender_id', target.id)
+    .eq('status', 'accepted')
+
+  const { data: received } = await supabase
+    .from('friend_requests')
+    .select('sender_id')
+    .eq('receiver_id', target.id)
+    .eq('status', 'accepted')
+
+  const friendIds = []
+  if (sent) friendIds.push(...sent.map(r => r.receiver_id))
+  if (received) friendIds.push(...received.map(r => r.sender_id))
+
+  if (friendIds.length === 0) {
+    return res.json({ friends: [] })
+  }
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, avatar_url')
+    .in('id', friendIds)
+
+  res.json({ friends: profiles || [] })
 }))
 
 app.use((err, req, res, next) => {

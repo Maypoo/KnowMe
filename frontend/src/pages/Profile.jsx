@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import Avatar from '../components/Avatar'
+import FollowersList from '../components/FollowersList'
+import FriendsListModal from '../components/FriendsListModal'
 
 export default function Profile() {
   const navigate = useNavigate()
@@ -11,6 +13,8 @@ export default function Profile() {
   const [error, setError] = useState(null)
   const [bio, setBio] = useState('')
   const [editingBio, setEditingBio] = useState(false)
+  const [showFollowers, setShowFollowers] = useState(false)
+  const [showFriends, setShowFriends] = useState(false)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -140,9 +144,19 @@ export default function Profile() {
               </p>
             )}
             <div className="flex items-center justify-center gap-4 mt-3 text-sm">
-              <span className="text-zinc-400">{profile.follower_count ?? 0} seguidores</span>
+              <button
+                onClick={() => setShowFollowers(true)}
+                className="text-zinc-400 hover:text-zinc-200 transition"
+              >
+                {profile.follower_count ?? 0} seguidores
+              </button>
               <span className="text-zinc-600">·</span>
-              <span className="text-zinc-400">{profile.friend_count ?? 0} amigos</span>
+              <button
+                onClick={() => setShowFriends(true)}
+                className="text-zinc-400 hover:text-zinc-200 transition"
+              >
+                {profile.friend_count ?? 0} amigos
+              </button>
             </div>
           </div>
 
@@ -197,6 +211,12 @@ export default function Profile() {
           )}
         </div>
       </div>
+      {showFollowers && (
+        <FollowersList username={profile.username} onClose={() => setShowFollowers(false)} />
+      )}
+      {showFriends && (
+        <FriendsListModal username={profile.username} onClose={() => setShowFriends(false)} />
+      )}
     </div>
   )
 }
