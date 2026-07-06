@@ -3,7 +3,7 @@ import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
 
-export default function ChatsList({ onSelectChat, onNewChat, refreshTrigger, selectionMode, selectedChatIds, onToggleSelectChat }) {
+export default function ChatsList({ onSelectChat, refreshTrigger }) {
   const [chats, setChats] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -52,26 +52,12 @@ export default function ChatsList({ onSelectChat, onNewChat, refreshTrigger, sel
       ) : (
         <ul className="space-y-1">
           {chats.map(chat => {
-            const isSelected = selectedChatIds?.has(chat.id)
             return (
               <li key={chat.id}>
                 <button
-                  onClick={() => selectionMode ? onToggleSelectChat(chat.id) : onSelectChat(chat)}
-                  className={`w-full rounded-lg px-4 py-3 flex items-center gap-3 transition ${
-                    selectionMode
-                      ? isSelected ? 'bg-zinc-800' : 'bg-zinc-900 hover:bg-zinc-800/50'
-                      : 'bg-zinc-900 hover:bg-zinc-800'
-                  }`}
+                  onClick={() => onSelectChat(chat)}
+                  className="w-full rounded-lg px-4 py-3 flex items-center gap-3 transition bg-zinc-900 hover:bg-zinc-800"
                 >
-                  {selectionMode && (
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition flex-shrink-0 ${
-                      isSelected ? 'border-zinc-100' : 'border-zinc-600'
-                    }`}>
-                      {isSelected && (
-                        <div className="w-2.5 h-2.5 rounded-full bg-zinc-100" />
-                      )}
-                    </div>
-                  )}
                   <Avatar src={chat.otherUser?.avatar_url} size={40} />
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between">
@@ -79,7 +65,7 @@ export default function ChatsList({ onSelectChat, onNewChat, refreshTrigger, sel
                         {chat.otherUser?.username || 'Desconocido'}
                       </span>
                       <div className="flex items-center gap-2">
-                        {chat.unreadCount > 0 && !selectionMode && (
+                        {chat.unreadCount > 0 && (
                           <span
                             className="rounded-full text-[11px] font-medium flex items-center justify-center"
                             style={{

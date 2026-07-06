@@ -1185,6 +1185,10 @@ app.post('/api/chats/:chatId/messages', auth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'El mensaje no puede estar vacío' })
   }
 
+  if (content.trim().length > 300) {
+    return res.status(400).json({ error: 'El mensaje no puede superar los 300 caracteres' })
+  }
+
   const { data: participants } = await supabase
     .from('chat_participants')
     .select('user_id')

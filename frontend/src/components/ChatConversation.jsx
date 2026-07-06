@@ -10,6 +10,7 @@ export default function ChatConversation({ chat, onBack, profile }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -48,6 +49,13 @@ export default function ChatConversation({ chat, onBack, profile }) {
   const handleSend = async () => {
     const text = input.trim()
     if (!text || sending) return
+
+    if (text.length > 300) {
+      setError('El mensaje no puede superar los 300 caracteres')
+      return
+    }
+
+    setError('')
     setSending(true)
     setInput('')
     try {
@@ -58,8 +66,11 @@ export default function ChatConversation({ chat, onBack, profile }) {
       const data = await res.json()
       if (res.ok) {
         setMessages(prev => [...prev, data.message])
+      } else {
+        setError(data.error || 'Error al enviar el mensaje')
       }
     } catch {
+      setError('Error al enviar el mensaje')
     } finally {
       setSending(false)
     }
@@ -103,34 +114,51 @@ export default function ChatConversation({ chat, onBack, profile }) {
             <p className="text-zinc-600 text-sm">No hay mensajes aún. Enviá el primero.</p>
           </div>
         ) : (
-          messages.map(msg => (
-            <div key={msg.id} className={`flex ${msg.sender_id === profile.id ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                  msg.sender_id === profile.id ? 'rounded-br-md' : 'rounded-bl-md'
-                }`}
-                style={{
-                  backgroundColor: msg.sender_id === profile.id ? '#6659ff' : '#27272a',
-                }}
-              >
-                <p className="text-zinc-100 text-sm">{msg.content}</p>
-                <p className="text-zinc-400 text-[10px] text-right mt-1">
-                  {new Date(msg.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                </p>
+          messages.map((msg, i) => {
+            const date = new Date(msg.created_at)
+            const today = new Date()
+            const isNewDay = i === 0 || new Date(messages[i - 1].created_at).toDateString() !== date.toDateString()
+            return (
+              <div key={msg.id}>
+                {isNewDay && (
+                  <p className="text-zinc-600 text-xs text-center py-2">
+                    {date.getFullYear() === today.getFullYear()
+                      ? date.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' })
+                      : date.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                )}
+                <div className={`flex ${msg.sender_id === profile.id ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className={`max-w-[80%] min-w-[100px] rounded-2xl px-4 py-3 break-words ${
+                      msg.sender_id === profile.id ? 'rounded-br-md' : 'rounded-bl-md'
+                    }`}
+                    style={{
+                      backgroundColor: msg.sender_id === profile.id ? '#6659ff' : '#27272a',
+                    }}
+                  >
+                    <p className="text-zinc-100 text-sm">{msg.content}</p>
+                    <p className="text-zinc-400 text-[10px] text-right mt-1">
+                      {date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))
+          )})
         )}
         <div ref={bottomRef} />
       </div>
 
+      {error && (
+        <p className="text-red-400 text-xs mb-2 text-center">{error}</p>
+      )}
       <div className="flex items-center gap-2">
         <input
           type="text"
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={e => { setInput(e.target.value); setError('') }}
           onKeyDown={handleKeyDown}
           placeholder="Escribí un mensaje..."
+          maxLength={300}
           className="flex-1 bg-zinc-900 border border-zinc-800 rounded-full px-4 py-2.5 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-zinc-600 transition"
         />
         <button

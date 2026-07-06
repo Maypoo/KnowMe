@@ -30,27 +30,12 @@ export default function Home() {
   const [chatsView, setChatsView] = useState('list')
   const [activeChat, setActiveChat] = useState(null)
   const [chatsRefreshTrigger, setChatsRefreshTrigger] = useState(0)
-  const [chatSettingsOpen, setChatSettingsOpen] = useState(false)
-  const [selectionMode, setSelectionMode] = useState(false)
-  const [selectedChatIds, setSelectedChatIds] = useState(new Set())
-  const [deleteAllConfirming, setDeleteAllConfirming] = useState(false)
   const dropdownRef = useRef(null)
-  const chatSettingsRef = useRef(null)
 
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (chatSettingsRef.current && !chatSettingsRef.current.contains(e.target)) {
-        setChatSettingsOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -124,45 +109,6 @@ export default function Home() {
       sessionStorage.removeItem('chatReturn')
     }
   }, [profile])
-
-  const handleToggleSelectChat = (chatId) => {
-    setSelectedChatIds(prev => {
-      const next = new Set(prev)
-      if (next.has(chatId)) {
-        next.delete(chatId)
-      } else {
-        next.add(chatId)
-      }
-      return next
-    })
-  }
-
-  const handleEnterSelectionMode = () => {
-    setSelectionMode(true)
-    setSelectedChatIds(new Set())
-    setChatSettingsOpen(false)
-  }
-
-  const handleCancelSelectionMode = () => {
-    setSelectionMode(false)
-    setSelectedChatIds(new Set())
-  }
-
-  const handleDeleteSelected = async () => {
-    if (selectedChatIds.size === 0) return
-    for (const chatId of selectedChatIds) {
-      await api(`/api/chats/${chatId}/leave`, { method: 'DELETE' }).catch(() => {})
-    }
-    setSelectionMode(false)
-    setSelectedChatIds(new Set())
-    setChatsRefreshTrigger(t => t + 1)
-  }
-
-  const handleDeleteAllChats = async () => {
-    await api('/api/chats/leave-all', { method: 'DELETE' }).catch(() => {})
-    setDeleteAllConfirming(false)
-    setChatsRefreshTrigger(t => t + 1)
-  }
 
   const handleLogout = async () => {
     if (socket.connected) {
@@ -273,74 +219,22 @@ export default function Home() {
                 <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} />
               ) : (
                 <section className="flex-1 flex flex-col min-h-0">
-                  {selectionMode ? (
-                    <div className="flex items-center justify-between mb-4">
-                      <button onClick={handleCancelSelectionMode} className="text-zinc-400 hover:text-zinc-100 transition text-sm">
-                        Cancelar
-                      </button>
-                      <span className="text-zinc-100 text-sm font-medium">
-                        {selectedChatIds.size} seleccionados
-                      </span>
-                      <button
-                        onClick={handleDeleteSelected}
-                        disabled={selectedChatIds.size === 0}
-                        className="text-sm font-medium transition disabled:opacity-40"
-                        style={{ color: selectedChatIds.size > 0 ? '#ef4444' : '#52525b' }}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-zinc-100 text-lg font-semibold">Chats</h2>
-                      <div className="flex items-center gap-2">
-                        <div className="relative" ref={chatSettingsRef}>
-                          <button
-                            onClick={() => setChatSettingsOpen(!chatSettingsOpen)}
-                            className="rounded-full p-2 transition text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
-                          >
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <circle cx="12" cy="12" r="3" />
-                              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                            </svg>
-                          </button>
-                          {chatSettingsOpen && (
-                            <div className="absolute right-0 mt-2 w-52 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1 z-50">
-                              <button
-                                onClick={handleEnterSelectionMode}
-                                className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
-                              >
-                                Seleccionar chats
-                              </button>
-                              <button
-                                onClick={() => { setDeleteAllConfirming(true); setChatSettingsOpen(false) }}
-                                className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
-                              >
-                                Eliminar todos los chats
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={handleNewChat}
-                          className="rounded-full p-2 transition hover:opacity-80"
-                          style={{ backgroundColor: '#6659ff' }}
-                        >
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19" />
-                            <line x1="5" y1="12" x2="19" y2="12" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-zinc-100 text-lg font-semibold">Chats</h2>
+                    <button
+                      onClick={handleNewChat}
+                      className="rounded-full p-2 transition hover:opacity-80"
+                      style={{ backgroundColor: '#6659ff' }}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    </button>
+                  </div>
                   <ChatsList
                     onSelectChat={handleSelectChat}
-                    onNewChat={handleNewChat}
                     refreshTrigger={chatsRefreshTrigger}
-                    selectionMode={selectionMode}
-                    selectedChatIds={selectedChatIds}
-                    onToggleSelectChat={handleToggleSelectChat}
                   />
                 </section>
               )}
@@ -403,31 +297,6 @@ export default function Home() {
           </button>
         </div>
       </div>
-
-      {deleteAllConfirming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setDeleteAllConfirming(false)} />
-          <div className="relative bg-zinc-900 rounded-xl px-6 py-5 w-full max-w-xs">
-            <p className="text-zinc-100 text-sm mb-4">
-              ¿Eliminar todos los chats? Esta acción es solo para vos.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setDeleteAllConfirming(false)}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-4 py-2 text-sm transition"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleDeleteAllChats}
-                className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm transition"
-              >
-                Eliminar todos
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

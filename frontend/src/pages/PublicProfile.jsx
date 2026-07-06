@@ -62,6 +62,20 @@ export default function PublicProfile() {
     }
   }
 
+  const handleSendMessage = async () => {
+    try {
+      const res = await api('/api/chats', {
+        method: 'POST',
+        body: JSON.stringify({ userId: profile.id }),
+      })
+      const data = await res.json()
+      if (res.ok && data.chat) {
+        sessionStorage.setItem('chatReturn', JSON.stringify({ activeChat: data.chat }))
+        navigate('/')
+      }
+    } catch {}
+  }
+
   const handleSendRequest = async () => {
     setActionLoading(true)
     try {
@@ -116,7 +130,7 @@ export default function PublicProfile() {
         >
           ← Volver
         </button>
-        <div className="flex flex-col items-center gap-6">
+        <div className="flex flex-col items-center gap-4">
           <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-zinc-800" />
 
           <div className="text-center">
@@ -125,7 +139,7 @@ export default function PublicProfile() {
               <p className="text-zinc-400 text-sm text-center max-w-sm mt-2 whitespace-pre-wrap">{profile.bio}</p>
             )}
             {profile.created_at && (
-              <p className="text-zinc-600 text-xs mt-4">
+              <p className="text-zinc-600 text-xs mt-2">
                 Miembro desde el {new Date(profile.created_at).getDate()} de {MONTHS[new Date(profile.created_at).getMonth()]} del {new Date(profile.created_at).getFullYear()}
               </p>
             )}
@@ -194,6 +208,18 @@ export default function PublicProfile() {
               </button>
             )}
           </div>
+          {profile.friend_request_status === 'accepted' && (
+            <button
+              onClick={handleSendMessage}
+              className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
+              style={{ backgroundColor: '#6659ff' }}
+            >
+              <svg className="inline-block w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+              </svg>
+              Enviar mensaje
+            </button>
+          )}
 
           {error && (
             <p className="text-red-400 text-sm">{error}</p>
