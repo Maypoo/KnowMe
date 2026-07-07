@@ -11,6 +11,8 @@ export default function ChatConversation({ chat, onBack, profile }) {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [isFriend, setIsFriend] = useState(chat.isFriend ?? true)
+  const [friendRequestSent, setFriendRequestSent] = useState(false)
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -22,6 +24,8 @@ export default function ChatConversation({ chat, onBack, profile }) {
       .then(res => res.json())
       .then(data => {
         if (data.messages) setMessages(data.messages)
+        if (typeof data.isFriend === 'boolean') setIsFriend(data.isFriend)
+        if (data.pendingRequest) setFriendRequestSent(true)
       })
       .finally(() => setLoading(false))
 
@@ -90,6 +94,28 @@ export default function ChatConversation({ chat, onBack, profile }) {
     }
   }
 
+  const handleSendFriendRequest = async () => {
+    try {
+      const res = await api('/api/friends/request', {
+        method: 'POST',
+        body: JSON.stringify({ username: chat.otherUser?.username }),
+      })
+      if (res.ok) {
+        setFriendRequestSent(true)
+        setError('')
+      } else {
+        const data = await res.json()
+        if (data.error === 'Ya hay una solicitud pendiente') {
+          setFriendRequestSent(true)
+        } else {
+          setError(data.error || 'Error al enviar la solicitud')
+        }
+      }
+    } catch {
+      setError('Error al enviar la solicitud')
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center gap-3 mb-4">
@@ -151,28 +177,54 @@ export default function ChatConversation({ chat, onBack, profile }) {
       {error && (
         <p className="text-red-400 text-xs mb-2 text-center">{error}</p>
       )}
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={e => { setInput(e.target.value); setError('') }}
-          onKeyDown={handleKeyDown}
-          placeholder="Escribí un mensaje..."
-          maxLength={300}
-          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-full px-4 py-2.5 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-zinc-600 transition"
-        />
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || sending}
-          className="rounded-full p-2.5 transition disabled:opacity-40"
-          style={{ backgroundColor: '#6659ff' }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-        </button>
-      </div>
+
+      {!isFriend ? (
+        <div className="flex flex-col items-center gap-2 py-4 px-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
+          <p className="text-zinc-400 text-sm text-center">
+            No podés enviar mensajes a menos que sean amigos.
+          </p>
+          {friendRequestSent ? (
+            <button
+              disabled
+              className="rounded-full px-5 py-2 text-sm font-medium text-white opacity-60 cursor-not-allowed"
+              style={{ backgroundColor: '#6659ff' }}
+            >
+              Solicitud de amistad enviada
+            </button>
+          ) : (
+            <button
+              onClick={handleSendFriendRequest}
+              className="rounded-full px-5 py-2 text-sm font-medium text-white transition hover:opacity-80"
+              style={{ backgroundColor: '#6659ff' }}
+            >
+              Enviar solicitud de amistad
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={e => { setInput(e.target.value); setError('') }}
+            onKeyDown={handleKeyDown}
+            placeholder="Escribí un mensaje..."
+            maxLength={300}
+            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-full px-4 py-2.5 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-zinc-600 transition"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || sending}
+            className="rounded-full p-2.5 transition disabled:opacity-40"
+            style={{ backgroundColor: '#6659ff' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

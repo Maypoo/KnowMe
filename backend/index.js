@@ -521,6 +521,16 @@ app.get('/api/friends/requests', auth, asyncHandler(async (req, res) => {
   res.json({ requests: enriched })
 }))
 
+app.get('/api/friends/requests/count', auth, asyncHandler(async (req, res) => {
+  const { count } = await supabase
+    .from('friend_requests')
+    .select('*', { count: 'exact', head: true })
+    .eq('receiver_id', req.user.id)
+    .eq('status', 'pending')
+
+  res.json({ count: count || 0 })
+}))
+
 app.post('/api/friends/respond', auth, asyncHandler(async (req, res) => {
   const { requestId, action } = req.body
 
@@ -974,6 +984,27 @@ app.get('/api/chats', auth, asyncHandler(async (req, res) => {
 
   const otherUserIds = allParticipants ? allParticipants.map(p => p.user_id) : []
 
+  const { data: friendships } = await supabase
+    .from('friend_requests')
+    .select('sender_id, receiver_id')
+    .eq('status', 'accepted')
+    .or(`sender_id.eq.${req.user.id},receiver_id.eq.${req.user.id}`)
+
+  const friendIds = new Set()
+  if (friendships) {
+    for (const f of friendships) {
+      if (f.sender_id === req.user.id) friendIds.add(f.receiver_id)
+      if (f.receiver_id === req.user.id) friendIds.add(f.sender_id)
+    }
+  }
+
+  const otherUserIdMap = {}
+  if (allParticipants) {
+    for (const p of allParticipants) {
+      otherUserIdMap[p.chat_id] = p.user_id
+    }
+  }
+
   const { data: otherProfiles } = await supabase
     .from('profiles')
     .select('id, username, avatar_url')
@@ -1016,6 +1047,7 @@ app.get('/api/chats', auth, asyncHandler(async (req, res) => {
     return {
       id: chat.id,
       otherUser: participantMap[chat.id] || null,
+      isFriend: otherUserIdMap[chat.id] ? friendIds.has(otherUserIdMap[chat.id]) : false,
       unreadCount,
       lastMessage: lastMsg ? {
         id: lastMsg.id,
@@ -1157,15 +1189,42 @@ app.post('/api/chats', auth, asyncHandler(async (req, res) => {
 app.get('/api/chats/:chatId/messages', auth, asyncHandler(async (req, res) => {
   const { chatId } = req.params
 
-  const { data: participation } = await supabase
+  const { data: participants } = await supabase
     .from('chat_participants')
-    .select('chat_id')
+    .select('user_id')
     .eq('chat_id', chatId)
-    .eq('user_id', req.user.id)
-    .maybeSingle()
 
-  if (!participation) {
+  if (!participants || participants.length === 0) {
+    return res.status(404).json({ error: 'Chat no encontrado' })
+  }
+
+  const isParticipant = participants.some(p => p.user_id === req.user.id)
+  if (!isParticipant) {
     return res.status(403).json({ error: 'No sos participante de este chat' })
+  }
+
+  const otherUserId = participants.find(p => p.user_id !== req.user.id)?.user_id
+
+  let isFriend = false
+  let pendingRequest = false
+  if (otherUserId) {
+    const [friendshipResult, pendingResult] = await Promise.all([
+      supabase
+        .from('friend_requests')
+        .select('id')
+        .eq('status', 'accepted')
+        .or(`and(sender_id.eq.${req.user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${req.user.id})`)
+        .maybeSingle(),
+      supabase
+        .from('friend_requests')
+        .select('id')
+        .eq('sender_id', req.user.id)
+        .eq('receiver_id', otherUserId)
+        .eq('status', 'pending')
+        .maybeSingle(),
+    ])
+    isFriend = !!friendshipResult.data
+    pendingRequest = !!pendingResult.data
   }
 
   const { data: messages } = await supabase
@@ -1174,7 +1233,7 @@ app.get('/api/chats/:chatId/messages', auth, asyncHandler(async (req, res) => {
     .eq('chat_id', chatId)
     .order('created_at', { ascending: true })
 
-  res.json({ messages: messages || [] })
+  res.json({ messages: messages || [], isFriend, pendingRequest })
 }))
 
 app.post('/api/chats/:chatId/messages', auth, asyncHandler(async (req, res) => {
@@ -1201,6 +1260,19 @@ app.post('/api/chats/:chatId/messages', auth, asyncHandler(async (req, res) => {
   const isParticipant = participants.some(p => p.user_id === req.user.id)
   if (!isParticipant) {
     return res.status(403).json({ error: 'No sos participante de este chat' })
+  }
+
+  const otherUserId = participants.find(p => p.user_id !== req.user.id)?.user_id
+  if (otherUserId) {
+    const { data: friendship } = await supabase
+      .from('friend_requests')
+      .select('id')
+      .eq('status', 'accepted')
+      .or(`and(sender_id.eq.${req.user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${req.user.id})`)
+      .maybeSingle()
+    if (!friendship) {
+      return res.status(403).json({ error: 'No son amigos. No podés enviar mensajes.' })
+    }
   }
 
   const { data: message, error: msgError } = await supabase

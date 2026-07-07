@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import Avatar from './Avatar'
 
-export default function FriendRequests({ refreshTrigger }) {
+export default function FriendRequests({ refreshTrigger, onRespond }) {
   const navigate = useNavigate()
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -33,6 +33,7 @@ export default function FriendRequests({ refreshTrigger }) {
 
     if (res.ok) {
       setRequests(prev => prev.filter(r => r.id !== requestId))
+      onRespond?.()
     }
   }
 

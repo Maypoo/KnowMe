@@ -18,18 +18,36 @@ const TABS = [
   { key: 'pending', label: 'Enviadas' },
 ]
 
+const HOME_STATE_KEY = 'knowme_home_state'
+
+function loadSavedState() {
+  try {
+    const raw = localStorage.getItem(HOME_STATE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed.view && !['friends', 'chats'].includes(parsed.view)) return null
+    if (parsed.tab && !['friends', 'add', 'requests', 'pending'].includes(parsed.tab)) return null
+    if (parsed.chatsView && !['list', 'new'].includes(parsed.chatsView)) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 export default function Home() {
   const navigate = useNavigate()
+  const saved = useRef(loadSavedState())
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [tab, setTab] = useState('friends')
+  const [tab, setTab] = useState(saved.current?.tab ?? 'friends')
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [view, setView] = useState('friends')
-  const [chatsView, setChatsView] = useState('list')
-  const [activeChat, setActiveChat] = useState(null)
+  const [view, setView] = useState(saved.current?.view ?? 'friends')
+  const [chatsView, setChatsView] = useState(saved.current?.chatsView ?? 'list')
+  const [activeChat, setActiveChat] = useState(saved.current?.activeChat ?? null)
   const [chatsRefreshTrigger, setChatsRefreshTrigger] = useState(0)
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
   const dropdownRef = useRef(null)
 
   useEffect(() => {
@@ -97,6 +115,23 @@ export default function Home() {
 
   useEffect(() => {
     if (!profile) return
+    api('/api/friends/requests/count')
+      .then(res => res.json())
+      .then(data => {
+        if (data.count !== undefined) {
+          setPendingRequestsCount(data.count)
+        }
+      })
+      .catch(() => {})
+  }, [profile, refreshTrigger])
+
+  useEffect(() => {
+    if (!profile) return
+    localStorage.setItem(HOME_STATE_KEY, JSON.stringify({ view, tab, activeChat, chatsView }))
+  }, [view, tab, activeChat, chatsView, profile])
+
+  useEffect(() => {
+    if (!profile) return
     const stored = sessionStorage.getItem('chatReturn')
     if (stored) {
       try {
@@ -114,6 +149,7 @@ export default function Home() {
     if (socket.connected) {
       socket.disconnect()
     }
+    localStorage.removeItem(HOME_STATE_KEY)
     await api('/api/auth/logout', { method: 'POST' })
     navigate('/login')
   }
@@ -198,13 +234,27 @@ export default function Home() {
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`flex-1 rounded-md py-2 text-sm font-medium transition ${
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition relative ${
                   tab === t.key
                     ? 'bg-zinc-950 text-zinc-100'
                     : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
                 {t.label}
+                {t.key === 'requests' && pendingRequestsCount > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
+                    style={{
+                      backgroundColor: '#6659ff',
+                      color: '#fff',
+                      minWidth: 18,
+                      height: 18,
+                      padding: '0 5px',
+                    }}
+                  >
+                    {pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -249,7 +299,7 @@ export default function Home() {
 
               {tab === 'requests' && (
                 <section className="flex-1 flex flex-col">
-                  <FriendRequests refreshTrigger={refreshTrigger} />
+                  <FriendRequests refreshTrigger={refreshTrigger} onRespond={() => setRefreshTrigger(t => t + 1)} />
                 </section>
               )}
 
