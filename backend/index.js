@@ -8,7 +8,7 @@ import rateLimit from 'express-rate-limit'
 import auth from './middleware/auth.js'
 import { supabase } from './lib/supabase.js'
 import sharp from 'sharp'
-import { setupSocket, getIO } from './src/socket.js'
+import { setupSocket, getIO, isInCall, addToCall, removeFromCall } from './src/socket.js'
 
 const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next)
@@ -21,9 +21,21 @@ app.set('trust proxy', 1)
 
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(s => s.trim())
 
+function isLocalOrigin(origin) {
+  if (!origin) return false
+  try {
+    const hostname = new URL(origin).hostname
+    return hostname === 'localhost' || hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') || hostname.startsWith('10.') ||
+      hostname.startsWith('172.')
+  } catch {
+    return false
+  }
+}
+
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || isLocalOrigin(origin)) {
       callback(null, true)
     } else {
       callback(new Error('No autorizado por CORS'))
@@ -45,7 +57,7 @@ const csrfProtection = (req, res, next) => {
   }
 
   const source = (origin || referer || '').replace(/\/$/, '')
-  const isAllowed = allowedOrigins.includes(source)
+  const isAllowed = allowedOrigins.includes(source) || isLocalOrigin(source)
 
   if (!isAllowed) {
     return res.status(403).json({ error: 'Origen no permitido' })
@@ -98,6 +110,69 @@ const COOKIE_OPTIONS = {
 
 function sanitize(str) {
   return str.replace(/[<>"']/g, '').trim()
+}
+
+async function findChatId(userId1, userId2) {
+  const [r1, r2] = await Promise.all([
+    supabase.from('chat_participants').select('chat_id').eq('user_id', userId1),
+    supabase.from('chat_participants').select('chat_id').eq('user_id', userId2),
+  ])
+  if (r1.data && r2.data) {
+    const set1 = new Set(r1.data.map(c => c.chat_id))
+    const common = r2.data.filter(c => set1.has(c.chat_id))
+    if (common.length > 0) return common[0].chat_id
+  }
+  return null
+}
+
+async function findOrCreateChat(userId1, userId2) {
+  const existing = await findChatId(userId1, userId2)
+  if (existing) return existing
+  const { data: chat } = await supabase.from('chats').insert({}).select().single()
+  if (!chat) return null
+  await Promise.all([
+    supabase.from('chat_participants').insert({ chat_id: chat.id, user_id: userId1 }),
+    supabase.from('chat_participants').insert({ chat_id: chat.id, user_id: userId2 }),
+  ])
+  return chat.id
+}
+
+async function insertMissedCall(callerId, targetId) {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('username, display_name')
+    .eq('id', callerId)
+    .maybeSingle()
+  if (!profile) return
+
+  const chatId = await findOrCreateChat(callerId, targetId)
+  if (!chatId) return
+
+  const content = `Llamada perdida de ${profile.display_name || profile.username}`
+
+  const { data: message } = await supabase
+    .from('chat_messages')
+    .insert({ chat_id: chatId, sender_id: callerId, content })
+    .select()
+    .single()
+
+  if (message) {
+    const io = getIO()
+    if (io) {
+      for (const uid of [callerId, targetId]) {
+        io.to(uid).emit('new_message', { chatId, message })
+      }
+    }
+  }
+}
+
+function escapeILike(str) {
+  return str.replace(/_/g, '\\_').replace(/%/g, '\\%')
+}
+
+function withDisplayName(profile) {
+  if (!profile) return profile
+  return { ...profile, username: profile.display_name || profile.username }
 }
 
 async function uploadAvatar(userId, base64) {
@@ -251,21 +326,22 @@ app.post('/api/auth/setup-username', auth, authLimiter, asyncHandler(async (req,
     return res.status(400).json({ error: 'El username debe tener entre 2 y 20 caracteres' })
   }
 
+  const sanitizedUsername = sanitize(username)
+  const lowerUsername = sanitizedUsername.toLowerCase()
+
   const { data: existing } = await supabase
     .from('profiles')
     .select('username')
-    .eq('username', username)
+    .ilike('username', escapeILike(lowerUsername))
     .maybeSingle()
 
   if (existing) {
     return res.status(409).json({ error: 'Ese nombre de usuario ya está en uso' })
   }
 
-  const sanitizedUsername = sanitize(username)
-
   let avatarUrl = avatar ? await uploadAvatar(req.user.id, avatar) : null
 
-  const profileData = { id: req.user.id, username: sanitizedUsername, email: req.user.email }
+  const profileData = { id: req.user.id, username: lowerUsername, display_name: sanitizedUsername, email: req.user.email }
   if (avatarUrl) profileData.avatar_url = avatarUrl
 
   const { data: profile, error: profileError } = await supabase
@@ -278,19 +354,23 @@ app.post('/api/auth/setup-username', auth, authLimiter, asyncHandler(async (req,
     return res.status(400).json({ error: 'Error al crear el perfil' })
   }
 
+  if (profile) {
+    profile.username = profile.display_name || profile.username
+  }
+
   auditLog('register_google_complete', req.user.id, req.user.email, { username, ip: req.ip, user_agent: req.headers['user-agent'] })
   res.json({ profile })
 }))
 
 app.get('/api/auth/me', auth, asyncHandler(async (req, res) => {
-  const { data: profile } = await supabase
+  let { data: profile } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', req.user.id)
     .maybeSingle()
 
   if (profile) {
-    profile.username = sanitize(profile.username)
+    profile = withDisplayName(profile)
   }
 
   let followerCount = 0
@@ -328,12 +408,14 @@ app.get('/api/profile/:username', auth, asyncHandler(async (req, res) => {
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
-    .eq('username', sanitized)
+    .ilike('username', escapeILike(sanitized.toLowerCase()))
     .maybeSingle()
 
   if (!profile) {
     return res.status(404).json({ error: 'Usuario no encontrado' })
   }
+
+  profile.username = profile.display_name || profile.username
 
   const [{ count: followerCount }, { count: followingCount }] = await Promise.all([
     supabase.from('followers').select('*', { count: 'exact', head: true }).eq('following_id', profile.id),
@@ -383,12 +465,13 @@ app.get('/api/users/search', auth, asyncHandler(async (req, res) => {
 
   const { data: users } = await supabase
     .from('profiles')
-    .select('id, username, avatar_url')
-    .ilike('username', `%${sanitized}%`)
+    .select('id, username, display_name, avatar_url')
+    .ilike('username', `%${escapeILike(sanitized.toLowerCase())}%`)
     .neq('id', req.user.id)
     .limit(10)
 
-  res.json({ users: users || [] })
+  const mapped = (users || []).map(u => ({ ...u, username: u.display_name || u.username }))
+  res.json({ users: mapped })
 }))
 
 app.post('/api/friends/request', auth, asyncHandler(async (req, res) => {
@@ -404,8 +487,8 @@ app.post('/api/friends/request', auth, asyncHandler(async (req, res) => {
 
   const { data: target } = await supabase
     .from('profiles')
-    .select('id, username')
-    .eq('username', sanitize(username))
+    .select('id, username, display_name')
+    .ilike('username', escapeILike(sanitize(username).toLowerCase()))
     .maybeSingle()
 
   if (!target) {
@@ -441,7 +524,7 @@ app.post('/api/friends/request', auth, asyncHandler(async (req, res) => {
 
       const { data: senderProfile } = await supabase
         .from('profiles')
-        .select('username, avatar_url')
+        .select('username, display_name, avatar_url')
         .eq('id', req.user.id)
         .maybeSingle()
 
@@ -449,7 +532,7 @@ app.post('/api/friends/request', auth, asyncHandler(async (req, res) => {
       if (io) {
         io.to(target.id).emit('friend_request_received', {
           id: existing.id,
-          sender: { id: req.user.id, username: sanitize(senderProfile?.username || 'Desconocido'), avatar_url: senderProfile?.avatar_url || null },
+          sender: { id: req.user.id, username: sanitize(senderProfile?.display_name || senderProfile?.username || 'Desconocido'), avatar_url: senderProfile?.avatar_url || null },
           status: 'pending',
         })
       }
@@ -470,7 +553,7 @@ app.post('/api/friends/request', auth, asyncHandler(async (req, res) => {
 
   const { data: senderProfile } = await supabase
     .from('profiles')
-    .select('username, avatar_url')
+    .select('username, display_name, avatar_url')
     .eq('id', req.user.id)
     .maybeSingle()
 
@@ -478,7 +561,7 @@ app.post('/api/friends/request', auth, asyncHandler(async (req, res) => {
   if (io) {
     io.to(target.id).emit('friend_request_received', {
       id: request.id,
-      sender: { id: req.user.id, username: sanitize(senderProfile?.username || 'Desconocido'), avatar_url: senderProfile?.avatar_url || null },
+      sender: { id: req.user.id, username: sanitize(senderProfile?.display_name || senderProfile?.username || 'Desconocido'), avatar_url: senderProfile?.avatar_url || null },
       status: 'pending',
     })
   }
@@ -501,13 +584,13 @@ app.get('/api/friends/requests', auth, asyncHandler(async (req, res) => {
   const senderIds = requests.map(r => r.sender_id)
   const { data: senders } = await supabase
     .from('profiles')
-    .select('id, username, avatar_url')
+    .select('id, username, display_name, avatar_url')
     .in('id', senderIds)
 
   const senderMap = {}
   if (senders) {
     for (const s of senders) {
-      senderMap[s.id] = { username: sanitize(s.username), avatar_url: s.avatar_url }
+      senderMap[s.id] = { username: sanitize(s.display_name || s.username), avatar_url: s.avatar_url }
     }
   }
 
@@ -600,12 +683,12 @@ app.get('/api/friends', auth, asyncHandler(async (req, res) => {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, username, avatar_url')
+    .select('id, username, display_name, avatar_url')
     .in('id', friendIds)
 
   const friends = (profiles || []).map(p => ({
     id: p.id,
-    username: sanitize(p.username),
+    username: sanitize(p.display_name || p.username),
     avatar_url: p.avatar_url,
   }))
 
@@ -627,13 +710,13 @@ app.get('/api/friends/pending', auth, asyncHandler(async (req, res) => {
   const receiverIds = requests.map(r => r.receiver_id)
   const { data: receivers } = await supabase
     .from('profiles')
-    .select('id, username, avatar_url')
+    .select('id, username, display_name, avatar_url')
     .in('id', receiverIds)
 
   const receiverMap = {}
   if (receivers) {
     for (const r of receivers) {
-      receiverMap[r.id] = { username: sanitize(r.username), avatar_url: r.avatar_url }
+      receiverMap[r.id] = { username: sanitize(r.display_name || r.username), avatar_url: r.avatar_url }
     }
   }
 
@@ -801,7 +884,7 @@ app.post('/api/follow/:username', auth, asyncHandler(async (req, res) => {
   const { data: target } = await supabase
     .from('profiles')
     .select('id')
-    .eq('username', sanitized)
+    .ilike('username', escapeILike(sanitized.toLowerCase()))
     .maybeSingle()
 
   if (!target) {
@@ -833,7 +916,7 @@ app.delete('/api/follow/:username', auth, asyncHandler(async (req, res) => {
   const { data: target } = await supabase
     .from('profiles')
     .select('id')
-    .eq('username', sanitized)
+    .ilike('username', escapeILike(sanitized.toLowerCase()))
     .maybeSingle()
 
   if (!target) {
@@ -860,7 +943,7 @@ app.get('/api/followers/:username', auth, asyncHandler(async (req, res) => {
   const { data: target } = await supabase
     .from('profiles')
     .select('id')
-    .eq('username', sanitized)
+    .ilike('username', escapeILike(sanitized.toLowerCase()))
     .maybeSingle()
 
   if (!target) {
@@ -885,7 +968,7 @@ app.get('/api/followers/:username', auth, asyncHandler(async (req, res) => {
 
   const { data: profiles, error: profileError } = await supabase
     .from('profiles')
-    .select('id, username, avatar_url')
+    .select('id, username, display_name, avatar_url')
     .in('id', followerIds)
 
   if (profileError) {
@@ -895,7 +978,8 @@ app.get('/api/followers/:username', auth, asyncHandler(async (req, res) => {
   const idOrder = followerIds
   profiles.sort((a, b) => idOrder.indexOf(a.id) - idOrder.indexOf(b.id))
 
-  res.json({ followers: profiles })
+  const mapped = (profiles || []).map(p => ({ ...p, username: p.display_name || p.username }))
+  res.json({ followers: mapped })
 }))
 
 app.get('/api/friends/:username', auth, asyncHandler(async (req, res) => {
@@ -905,7 +989,7 @@ app.get('/api/friends/:username', auth, asyncHandler(async (req, res) => {
   const { data: target } = await supabase
     .from('profiles')
     .select('id')
-    .eq('username', sanitized)
+    .ilike('username', escapeILike(sanitized.toLowerCase()))
     .maybeSingle()
 
   if (!target) {
@@ -934,10 +1018,11 @@ app.get('/api/friends/:username', auth, asyncHandler(async (req, res) => {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, username, avatar_url')
+    .select('id, username, display_name, avatar_url')
     .in('id', friendIds)
 
-  res.json({ friends: profiles || [] })
+  const mapped = (profiles || []).map(p => ({ ...p, username: p.display_name || p.username }))
+  res.json({ friends: mapped })
 }))
 
 app.get('/api/chats', auth, asyncHandler(async (req, res) => {
@@ -945,7 +1030,6 @@ app.get('/api/chats', auth, asyncHandler(async (req, res) => {
     .from('chat_participants')
     .select('chat_id')
     .eq('user_id', req.user.id)
-    .is('deleted_at', null)
 
   if (!participations || participations.length === 0) {
     return res.json({ chats: [] })
@@ -1007,13 +1091,13 @@ app.get('/api/chats', auth, asyncHandler(async (req, res) => {
 
   const { data: otherProfiles } = await supabase
     .from('profiles')
-    .select('id, username, avatar_url')
+    .select('id, username, display_name, avatar_url')
     .in('id', otherUserIds)
 
   const profileMap = {}
   if (otherProfiles) {
     for (const p of otherProfiles) {
-      profileMap[p.id] = { id: p.id, username: sanitize(p.username), avatar_url: p.avatar_url }
+      profileMap[p.id] = { id: p.id, username: sanitize(p.display_name || p.username), avatar_url: p.avatar_url }
     }
   }
 
@@ -1107,7 +1191,7 @@ app.post('/api/chats', auth, asyncHandler(async (req, res) => {
   if (existingChatId) {
     const { data: otherProfile } = await supabase
       .from('profiles')
-      .select('username, avatar_url')
+      .select('username, display_name, avatar_url')
       .eq('id', otherUserId)
       .maybeSingle()
 
@@ -1116,7 +1200,7 @@ app.post('/api/chats', auth, asyncHandler(async (req, res) => {
         id: existingChatId,
         otherUser: {
           id: otherUserId,
-          username: sanitize(otherProfile?.username || 'Desconocido'),
+          username: sanitize(otherProfile?.display_name || otherProfile?.username || 'Desconocido'),
           avatar_url: otherProfile?.avatar_url || null,
         },
       },
@@ -1149,7 +1233,7 @@ app.post('/api/chats', auth, asyncHandler(async (req, res) => {
 
   const { data: otherProfile } = await supabase
     .from('profiles')
-    .select('username, avatar_url')
+    .select('username, display_name, avatar_url')
     .eq('id', otherUserId)
     .maybeSingle()
 
@@ -1157,7 +1241,7 @@ app.post('/api/chats', auth, asyncHandler(async (req, res) => {
     id: chat.id,
     otherUser: {
       id: otherUserId,
-      username: sanitize(otherProfile?.username || 'Desconocido'),
+      username: sanitize(otherProfile?.display_name || otherProfile?.username || 'Desconocido'),
       avatar_url: otherProfile?.avatar_url || null,
     },
   }
@@ -1166,7 +1250,7 @@ app.post('/api/chats', auth, asyncHandler(async (req, res) => {
   if (io) {
     const { data: myProfile } = await supabase
       .from('profiles')
-      .select('username, avatar_url')
+      .select('username, display_name, avatar_url')
       .eq('id', req.user.id)
       .maybeSingle()
 
@@ -1175,7 +1259,7 @@ app.post('/api/chats', auth, asyncHandler(async (req, res) => {
         id: chat.id,
         otherUser: {
           id: req.user.id,
-          username: sanitize(myProfile?.username || 'Desconocido'),
+          username: sanitize(myProfile?.display_name || myProfile?.username || 'Desconocido'),
           avatar_url: myProfile?.avatar_url || null,
         },
         lastMessage: null,
@@ -1290,11 +1374,6 @@ app.post('/api/chats/:chatId/messages', auth, asyncHandler(async (req, res) => {
     .update({ updated_at: new Date().toISOString() })
     .eq('id', chatId)
 
-  await supabase
-    .from('chat_participants')
-    .update({ deleted_at: null })
-    .eq('chat_id', chatId)
-
   const io = getIO()
   if (io) {
     const otherUserIds = participants.filter(p => p.user_id !== req.user.id).map(p => p.user_id)
@@ -1331,45 +1410,105 @@ app.post('/api/chats/:chatId/read', auth, asyncHandler(async (req, res) => {
   res.json({ message: 'Marcado como leído' })
 }))
 
-app.delete('/api/chats/:chatId/leave', auth, asyncHandler(async (req, res) => {
-  const { chatId } = req.params
+app.post('/api/calls/offer', auth, asyncHandler(async (req, res) => {
+  const { targetUserId, sdp } = req.body
+  if (!targetUserId || !sdp) {
+    return res.status(400).json({ error: 'Parámetros requeridos' })
+  }
 
-  const { data: participation } = await supabase
-    .from('chat_participants')
-    .select('chat_id')
-    .eq('chat_id', chatId)
-    .eq('user_id', req.user.id)
+  if (isInCall(targetUserId)) {
+    await insertMissedCall(req.user.id, targetUserId)
+    return res.status(409).json({ error: 'user_busy', message: 'El usuario está en otra llamada' })
+  }
+
+  const io = getIO()
+  if (!io) {
+    return res.status(500).json({ error: 'Socket no disponible' })
+  }
+
+  const targetSockets = await io.in(targetUserId).fetchSockets()
+  if (targetSockets.length === 0) {
+    await insertMissedCall(req.user.id, targetUserId)
+    return res.status(404).json({ error: 'user_offline', message: 'El usuario no está disponible' })
+  }
+
+  addToCall(req.user.id)
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('username, display_name, avatar_url')
+    .eq('id', req.user.id)
     .maybeSingle()
 
-  if (!participation) {
-    return res.status(404).json({ error: 'Chat no encontrado' })
-  }
+  io.to(targetUserId).emit('signal:offer', {
+    caller: {
+      id: req.user.id,
+      username: profile?.display_name || profile?.username || 'Desconocido',
+      avatar_url: profile?.avatar_url || null,
+    },
+    sdp,
+  })
 
-  await supabase
-    .from('chat_participants')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('chat_id', chatId)
-    .eq('user_id', req.user.id)
+  io.to(req.user.id).emit('call:ack', { targetUserId })
 
-  res.json({ message: 'Chat eliminado' })
+  res.json({ sent: true })
 }))
 
-app.delete('/api/chats/leave-all', auth, asyncHandler(async (req, res) => {
-  const { data: participations } = await supabase
-    .from('chat_participants')
-    .select('chat_id')
-    .eq('user_id', req.user.id)
-
-  if (!participations || participations.length === 0) {
-    return res.json({ message: 'No hay chats para eliminar' })
+app.post('/api/calls/answer', auth, asyncHandler(async (req, res) => {
+  const { targetUserId, sdp } = req.body
+  if (!targetUserId || !sdp) {
+    return res.status(400).json({ error: 'Parámetros requeridos' })
   }
 
-  await supabase
-    .from('chat_participants')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('user_id', req.user.id)
+  addToCall(req.user.id)
 
-  res.json({ message: `${participations.length} chats eliminados` })
+  const io = getIO()
+  if (io) {
+    io.to(targetUserId).emit('signal:answer', { sdp })
+  }
+
+  res.json({ sent: true })
+}))
+
+app.post('/api/calls/ice-candidate', auth, asyncHandler(async (req, res) => {
+  const { targetUserId, candidate } = req.body
+  if (!targetUserId || !candidate) {
+    return res.status(400).json({ error: 'Parámetros requeridos' })
+  }
+
+  const io = getIO()
+  if (io) {
+    io.to(targetUserId).emit('signal:ice-candidate', { candidate })
+  }
+
+  res.json({ sent: true })
+}))
+
+app.post('/api/calls/end', auth, asyncHandler(async (req, res) => {
+  const { targetUserId } = req.body
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'Parámetros requeridos' })
+  }
+
+  removeFromCall(req.user.id)
+  removeFromCall(targetUserId)
+
+  const io = getIO()
+  if (io) {
+    io.to(targetUserId).emit('call:end', {})
+  }
+
+  res.json({ sent: true })
+}))
+
+app.post('/api/calls/missed', auth, asyncHandler(async (req, res) => {
+  const { targetUserId } = req.body
+  if (!targetUserId) {
+    return res.status(400).json({ error: 'targetUserId requerido' })
+  }
+
+  await insertMissedCall(req.user.id, targetUserId)
+  res.json({ sent: true })
 }))
 
 app.use((err, req, res, next) => {

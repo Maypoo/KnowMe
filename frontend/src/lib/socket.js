@@ -1,8 +1,14 @@
 import { io } from 'socket.io-client'
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || ''
+function resolveUrl() {
+  const raw = import.meta.env.VITE_API_URL || ''
+  if (!raw) return ''
+  const url = new URL(raw)
+  url.hostname = window.location.hostname
+  return url.toString().replace(/\/$/, '')
+}
 
-export const socket = io(SOCKET_URL, {
+export const socket = io(resolveUrl(), {
   autoConnect: false,
   withCredentials: true,
 })

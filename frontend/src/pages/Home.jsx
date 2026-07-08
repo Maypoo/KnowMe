@@ -10,6 +10,7 @@ import PendingRequests from '../components/PendingRequests'
 import ChatsList from '../components/ChatsList'
 import ChatConversation from '../components/ChatConversation'
 import NewChat from '../components/NewChat'
+import VoiceCall from '../components/VoiceCall'
 
 const TABS = [
   { key: 'friends', label: 'Amigos' },
@@ -49,6 +50,7 @@ export default function Home() {
   const [chatsRefreshTrigger, setChatsRefreshTrigger] = useState(0)
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
   const dropdownRef = useRef(null)
+  const voiceCallRef = useRef(null)
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -266,7 +268,7 @@ export default function Home() {
               {chatsView === 'new' ? (
                 <NewChat onSelectFriend={handleSelectFriend} onBack={handleBackFromNewChat} />
               ) : activeChat ? (
-                <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} />
+                <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} />
               ) : (
                 <section className="flex-1 flex flex-col min-h-0">
                   <div className="flex items-center justify-between mb-4">
@@ -347,6 +349,8 @@ export default function Home() {
           </button>
         </div>
       </div>
+
+      <VoiceCall ref={voiceCallRef} profile={profile} />
     </div>
   )
 }

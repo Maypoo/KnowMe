@@ -2,11 +2,25 @@ import { Server } from 'socket.io'
 import { supabase } from '../lib/supabase.js'
 
 let io
+const inCall = new Set()
+const callPairs = new Map()
 
 export function setupSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(s => s.trim()),
+      origin: (origin, callback) => {
+        const allowed = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(s => s.trim())
+        if (!origin || allowed.includes(origin)) return callback(null, true)
+        try {
+          const hostname = new URL(origin).hostname
+          const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' ||
+            hostname.startsWith('192.168.') || hostname.startsWith('10.') ||
+            hostname.startsWith('172.')
+          callback(null, isLocal)
+        } catch {
+          callback(null, false)
+        }
+      },
       credentials: true,
     },
   })
@@ -38,7 +52,90 @@ export function setupSocket(server) {
   io.on('connection', (socket) => {
     socket.join(socket.user.id)
 
-    socket.on('disconnect', () => {})
+    socket.on('signal:offer', async (data) => {
+      try {
+        const { targetUserId, sdp } = data
+        if (!targetUserId || !sdp) {
+          io.to(socket.user.id).emit('call:debug', { error: 'missing_params', targetUserId })
+          return
+        }
+
+        if (inCall.has(targetUserId) || inCall.has(socket.user.id)) {
+          io.to(socket.user.id).emit('call:busy', { targetUserId })
+          return
+        }
+
+        io.to(socket.user.id).emit('call:ack', { targetUserId })
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username, display_name, avatar_url')
+          .eq('id', socket.user.id)
+          .maybeSingle()
+
+        inCall.add(socket.user.id)
+        callPairs.set(socket.user.id, targetUserId)
+        callPairs.set(targetUserId, socket.user.id)
+        io.to(targetUserId).emit('signal:offer', {
+          caller: {
+            id: socket.user.id,
+            username: profile?.display_name || profile?.username || 'Desconocido',
+            avatar_url: profile?.avatar_url || null,
+          },
+          sdp,
+        })
+      } catch {
+        inCall.delete(socket.user.id)
+        io.to(socket.user.id).emit('call:busy', { targetUserId: data?.targetUserId })
+      }
+    })
+
+    socket.on('signal:answer', (data) => {
+      try {
+        const { targetUserId, sdp } = data
+        if (!targetUserId || !sdp) return
+
+        inCall.add(socket.user.id)
+        io.to(targetUserId).emit('signal:answer', {
+          sdp,
+        })
+      } catch {}
+    })
+
+    socket.on('signal:ice-candidate', (data) => {
+      try {
+        const { targetUserId, candidate } = data
+        if (!targetUserId || !candidate) return
+
+        io.to(targetUserId).emit('signal:ice-candidate', {
+          candidate,
+        })
+      } catch {}
+    })
+
+    socket.on('call:end', (data) => {
+      try {
+        const { targetUserId } = data
+        inCall.delete(socket.user.id)
+        inCall.delete(targetUserId)
+        callPairs.delete(socket.user.id)
+        callPairs.delete(targetUserId)
+        if (targetUserId) {
+          io.to(targetUserId).emit('call:end', {})
+        }
+      } catch {}
+    })
+
+    socket.on('disconnect', () => {
+      inCall.delete(socket.user.id)
+      const partnerId = callPairs.get(socket.user.id)
+      if (partnerId) {
+        inCall.delete(partnerId)
+        callPairs.delete(partnerId)
+        io.to(partnerId).emit('call:end', {})
+      }
+      callPairs.delete(socket.user.id)
+    })
   })
 
   return io
@@ -46,4 +143,16 @@ export function setupSocket(server) {
 
 export function getIO() {
   return io
+}
+
+export function isInCall(userId) {
+  return inCall.has(userId)
+}
+
+export function addToCall(userId) {
+  inCall.add(userId)
+}
+
+export function removeFromCall(userId) {
+  inCall.delete(userId)
 }

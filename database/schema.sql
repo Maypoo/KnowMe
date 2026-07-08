@@ -1,6 +1,7 @@
 create table profiles (
   id uuid references auth.users on delete cascade primary key,
   username text unique not null,
+  display_name text,
   email text unique not null,
   avatar_url text,
   bio text default '',
@@ -152,4 +153,3 @@ create policy "Chat messages gestionables solo por service_role"
   with check (true);
 
 alter table chat_participants add column last_read_at timestamptz default now();
-alter table chat_participants add column deleted_at timestamptz;
