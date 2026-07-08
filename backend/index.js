@@ -175,6 +175,31 @@ function withDisplayName(profile) {
   return { ...profile, username: profile.display_name || profile.username }
 }
 
+async function getUsernameChangeLimits(userId) {
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+
+  const { data: changes, error } = await supabase
+    .from('username_changes')
+    .select('created_at')
+    .eq('user_id', userId)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+
+  if (error) return { remaining: 3, nextAvailable: null }
+
+  const count = changes.length
+  const remaining = Math.max(0, 3 - count)
+
+  let nextAvailable = null
+  if (count >= 3) {
+    const oldest = changes[changes.length - 1]
+    const nextDate = new Date(new Date(oldest.created_at).getTime() + 14 * 24 * 60 * 60 * 1000)
+    nextAvailable = nextDate.toISOString()
+  }
+
+  return { remaining, nextAvailable }
+}
+
 async function uploadAvatar(userId, base64) {
   const matches = base64.match(/^data:image\/(png|jpeg|gif|webp);base64,(.+)$/)
   if (!matches) return null
@@ -277,6 +302,31 @@ app.post('/api/auth/logout', authLimiter, asyncHandler(async (req, res) => {
   res.json({ message: 'Sesión cerrada' })
 }))
 
+app.post('/api/auth/delete-account', authLimiter, asyncHandler(async (req, res) => {
+  const { access_token, refresh_token } = req.body
+
+  if (!access_token || !refresh_token) {
+    return res.status(400).json({ error: 'Token requerido' })
+  }
+
+  const { data: { user }, error: userError } = await supabase.auth.getUser(access_token)
+
+  if (userError || !user) {
+    return res.status(401).json({ error: 'Token inválido' })
+  }
+
+  const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id)
+
+  if (deleteError) {
+    auditLog('delete_account_failed', user.id, user.email, { reason: deleteError.message, ip: req.ip, user_agent: req.headers['user-agent'] })
+    return res.status(500).json({ error: 'Error al eliminar la cuenta' })
+  }
+
+  clearSessionCookies(res)
+  auditLog('delete_account', user.id, user.email, { ip: req.ip, user_agent: req.headers['user-agent'] })
+  res.json({ message: 'Cuenta eliminada' })
+}))
+
 app.post('/api/auth/google', authLimiter, asyncHandler(async (req, res) => {
   const { access_token, refresh_token } = req.body
 
@@ -318,12 +368,12 @@ app.post('/api/auth/setup-username', auth, authLimiter, asyncHandler(async (req,
     return res.status(400).json({ error: 'El nombre de usuario es obligatorio' })
   }
 
-  if (!/^@[a-zA-Z0-9_]+$/.test(username)) {
-    return res.status(400).json({ error: 'El username debe empezar con @ y solo puede contener letras, números y guión bajo' })
+  if (!/^@(?=.*[a-zA-Z])[a-zA-Z0-9_.]+$/.test(username)) {
+    return res.status(400).json({ error: 'El username debe tener al menos 1 letra, y solo puede contener letras, números, guión bajo y punto' })
   }
 
-  if (username.length < 2 || username.length > 20) {
-    return res.status(400).json({ error: 'El username debe tener entre 2 y 20 caracteres' })
+  if (username.length < 2 || username.length > 21) {
+    return res.status(400).json({ error: 'El username debe tener de 1 a 20 caracteres (sin contar el @)' })
   }
 
   const sanitizedUsername = sanitize(username)
@@ -393,11 +443,14 @@ app.get('/api/auth/me', auth, asyncHandler(async (req, res) => {
     friendCount = fc || 0
   }
 
+  const limits = profile ? await getUsernameChangeLimits(profile.id) : { remaining: 3, nextAvailable: null }
+
   res.json({
     user: req.user,
     profile: profile
       ? { ...profile, follower_count: followerCount, following_count: followingCount, friend_count: friendCount }
       : { username: req.user.user_metadata?.username || null },
+    limits,
   })
 }))
 
@@ -477,12 +530,12 @@ app.get('/api/users/search', auth, asyncHandler(async (req, res) => {
 app.post('/api/friends/request', auth, asyncHandler(async (req, res) => {
   const { username } = req.body
 
-  if (!username || !/^@[a-zA-Z0-9_]+$/.test(username)) {
+  if (!username || !/^@(?=.*[a-zA-Z])[a-zA-Z0-9_.]+$/.test(username)) {
     return res.status(400).json({ error: 'Nombre de usuario inválido' })
   }
 
-  if (username.length < 2 || username.length > 20) {
-    return res.status(400).json({ error: 'El username debe tener entre 2 y 20 caracteres' })
+  if (username.length < 2 || username.length > 21) {
+    return res.status(400).json({ error: 'El username debe tener de 1 a 20 caracteres (sin contar el @)' })
   }
 
   const { data: target } = await supabase
@@ -794,21 +847,132 @@ app.delete('/api/friends/request/:requestId', auth, asyncHandler(async (req, res
 }))
 
 app.patch('/api/profile', auth, asyncHandler(async (req, res) => {
-  const { bio } = req.body
+  const { bio, display_name, username, birth_date, show_age, country, show_country } = req.body
 
-  if (typeof bio !== 'string' || bio.length > 100) {
-    return res.status(400).json({ error: 'La biografía no puede superar los 100 caracteres' })
+  const updates = {}
+  let oldUsername
+
+  if (bio !== undefined) {
+    if (typeof bio !== 'string' || bio.length > 100) {
+      return res.status(400).json({ error: 'La biografía no puede superar los 100 caracteres' })
+    }
+    updates.bio = bio
+  }
+
+  if (birth_date !== undefined) {
+    if (birth_date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(birth_date)) {
+      return res.status(400).json({ error: 'Formato de fecha inválido' })
+    }
+    updates.birth_date = birth_date
+  }
+
+  if (show_age !== undefined) {
+    updates.show_age = Boolean(show_age)
+  }
+
+  if (country !== undefined) {
+    if (country !== null && (typeof country !== 'string' || country.length > 100)) {
+      return res.status(400).json({ error: 'País inválido' })
+    }
+    updates.country = country
+  }
+
+  if (show_country !== undefined) {
+    updates.show_country = Boolean(show_country)
+  }
+
+  if (username !== undefined) {
+    if (!/^@(?=.*[a-zA-Z])[a-zA-Z0-9_.]+$/.test(username)) {
+      return res.status(400).json({ error: 'El username debe tener al menos 1 letra, y solo puede contener letras, números, guión bajo y punto' })
+    }
+
+    if (username.length < 2 || username.length > 21) {
+      return res.status(400).json({ error: 'El username debe tener de 1 a 20 caracteres (sin contar el @)' })
+    }
+
+    const limits = await getUsernameChangeLimits(req.user.id)
+
+    if (limits.remaining === 0 && limits.nextAvailable) {
+      const dateStr = new Date(limits.nextAvailable).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })
+      return res.status(429).json({
+        error: `Alcanzaste el límite de cambios. Podrás cambiar tu nombre de usuario nuevamente a partir del ${dateStr}`,
+        limits,
+      })
+    }
+
+    const { data: current } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', req.user.id)
+      .maybeSingle()
+
+    if (!current) {
+      return res.status(404).json({ error: 'Perfil no encontrado' })
+    }
+
+    oldUsername = current.username
+
+    const sanitizedUsername = sanitize(username)
+    const lowerUsername = sanitizedUsername.toLowerCase()
+
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('username')
+      .ilike('username', escapeILike(lowerUsername))
+      .neq('id', req.user.id)
+      .maybeSingle()
+
+    if (existing) {
+      return res.status(409).json({ error: 'Ese nombre de usuario ya está en uso' })
+    }
+
+    updates.username = lowerUsername
+    updates.display_name = sanitizedUsername
+  }
+
+  if (display_name !== undefined) {
+    if (!/^@(?=.*[a-zA-Z])[a-zA-Z0-9_.]+$/.test(display_name)) {
+      return res.status(400).json({ error: 'El nombre debe tener al menos 1 letra, y solo puede contener letras, números, guión bajo y punto' })
+    }
+
+    const { data: current } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', req.user.id)
+      .maybeSingle()
+
+    if (!current) {
+      return res.status(404).json({ error: 'Perfil no encontrado' })
+    }
+
+    if (display_name.toLowerCase() !== current.username) {
+      return res.status(400).json({ error: 'Solo podés cambiar las mayúsculas de tu nombre de usuario' })
+    }
+
+    updates.display_name = display_name
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'No hay campos para actualizar' })
   }
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .update({ bio })
+    .update(updates)
     .eq('id', req.user.id)
     .select()
     .maybeSingle()
 
   if (error) {
     return res.status(400).json({ error: 'Error al actualizar el perfil' })
+  }
+
+  if (updates.username) {
+    await supabase.from('username_changes').insert({
+      user_id: req.user.id,
+      old_username: oldUsername,
+      new_username: updates.username,
+    })
   }
 
   const [{ count: followerCount }, { count: followingCount }] = await Promise.all([
@@ -822,14 +986,44 @@ app.patch('/api/profile', auth, asyncHandler(async (req, res) => {
     .eq('status', 'accepted')
     .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`)
 
+  const finalLimits = await getUsernameChangeLimits(req.user.id)
+
   res.json({
-    profile: {
+    profile: withDisplayName({
       ...profile,
       follower_count: followerCount || 0,
       following_count: followingCount || 0,
       friend_count: friendCount || 0,
-    },
+    }),
+    limits: finalLimits,
   })
+}))
+
+app.get('/api/username/check', auth, asyncHandler(async (req, res) => {
+  const { q } = req.query
+
+  if (!q || !/^@(?=.*[a-zA-Z])[a-zA-Z0-9_.]+$/.test(q)) {
+    return res.json({ available: false, error: 'Formato inválido' })
+  }
+
+  if (q.length < 2 || q.length > 21) {
+    return res.json({ available: false, error: 'Debe tener de 1 a 20 caracteres (sin contar el @)' })
+  }
+
+  const lower = q.toLowerCase()
+
+  const { data: existing } = await supabase
+    .from('profiles')
+    .select('username')
+    .ilike('username', escapeILike(lower))
+    .neq('id', req.user.id)
+    .maybeSingle()
+
+  if (existing) {
+    return res.json({ available: false, error: 'Ese nombre de usuario ya está en uso' })
+  }
+
+  res.json({ available: true })
 }))
 
 app.post('/api/avatar', auth, asyncHandler(async (req, res) => {

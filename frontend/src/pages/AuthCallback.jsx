@@ -18,12 +18,36 @@ export default function AuthCallback() {
     const handleCallback = async () => {
       setSlow(false)
 
+      const searchParams = new URLSearchParams(window.location.search)
+      const isDelete = searchParams.get('action') === 'delete'
+
       const hashParams = new URLSearchParams(window.location.hash.replace('#', ''))
       const accessToken = hashParams.get('access_token') || hashParams.get('provider_access_token')
       const refreshToken = hashParams.get('refresh_token')
 
       if (accessToken && refreshToken) {
         try {
+          if (isDelete) {
+            const res = await api('/api/auth/delete-account', {
+              method: 'POST',
+              body: JSON.stringify({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              }),
+            })
+
+            if (cancelled) return
+
+            if (!res.ok) {
+              const data = await res.json()
+              setError(data.error)
+              return
+            }
+
+            navigate('/login', { state: { deleted: true } })
+            return
+          }
+
           const res = await api('/api/auth/google', {
             method: 'POST',
             body: JSON.stringify({
@@ -53,6 +77,11 @@ export default function AuthCallback() {
           }
           return
         }
+      }
+
+      if (isDelete) {
+        setError('No se pudo reautenticar con Google')
+        return
       }
 
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()

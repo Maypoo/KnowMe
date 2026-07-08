@@ -6,12 +6,7 @@ export default function FriendSearch() {
   const [status, setStatus] = useState(null)
 
   const handleChange = (e) => {
-    const value = e.target.value
-    if (value === '' || value.startsWith('@')) {
-      setUsername(value)
-    } else {
-      setUsername('@' + value.replace(/[^a-zA-Z0-9_]/g, ''))
-    }
+    setUsername(e.target.value.replace(/[^a-zA-Z0-9_.]/g, ''))
     setStatus(null)
   }
 
@@ -19,7 +14,7 @@ export default function FriendSearch() {
     e.preventDefault()
     setStatus(null)
 
-    if (!username || username.length < 2) {
+    if (!username || username.length < 1) {
       setStatus({ type: 'error', message: 'Ingresá un nombre de usuario' })
       return
     }
@@ -27,7 +22,7 @@ export default function FriendSearch() {
     try {
       const res = await api('/api/friends/request', {
         method: 'POST',
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ username: '@' + username }),
       })
 
       const data = await res.json()
@@ -48,14 +43,16 @@ export default function FriendSearch() {
     <div>
       <h2 className="text-center text-zinc-300 text-lg font-semibold mb-3">Agregar un amigo</h2>
       <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          value={username}
-          onChange={handleChange}
-          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-zinc-600 transition"
-          placeholder="@usuario"
-          autoFocus
-        />
+        <div className="relative flex-1">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none text-sm">@</span>
+          <input
+            type="text"
+            value={username}
+            onChange={handleChange}
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-zinc-600 transition"
+            autoFocus
+          />
+        </div>
         <button
           type="submit"
           className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"

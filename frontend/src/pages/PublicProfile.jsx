@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import Avatar from '../components/Avatar'
+import countries from '../data/countries'
 import FollowersList from '../components/FollowersList'
 import FriendsListModal from '../components/FriendsListModal'
 
@@ -9,16 +10,27 @@ export default function PublicProfile() {
   const { username } = useParams()
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
+  const [currentUser, setCurrentUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [currentUserLoading, setCurrentUserLoading] = useState(true)
   const [error, setError] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [showFollowers, setShowFollowers] = useState(false)
   const [showFriends, setShowFriends] = useState(false)
 
   useEffect(() => {
+    api('/api/auth/me')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => setCurrentUser(data?.profile ?? null))
+      .catch(() => setCurrentUser(null))
+      .finally(() => setCurrentUserLoading(false))
+  }, [])
+
+  useEffect(() => {
     if (!username.startsWith('@')) {
       setError('Usuario no encontrado')
       setLoading(false)
+      setCurrentUserLoading(false)
       return
     }
     setLoading(true)
@@ -95,7 +107,7 @@ export default function PublicProfile() {
     }
   }
 
-  if (loading) {
+  if (loading || currentUserLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
         <p className="text-zinc-400">Cargando...</p>
@@ -138,6 +150,29 @@ export default function PublicProfile() {
             {profile.bio && (
               <p className="text-zinc-400 text-sm text-center max-w-sm mt-2 whitespace-pre-wrap">{profile.bio}</p>
             )}
+            {profile.show_country && profile.country ? (
+              (() => {
+                const c = countries.find(c => c.code === profile.country)
+                const age = profile.show_age && profile.birth_date
+                  ? new Date().getFullYear() - new Date(profile.birth_date).getFullYear()
+                  : null
+                return age ? (
+                  <p className="text-zinc-400 text-sm mt-2">
+                    {age} años  <span className="text-zinc-600 mx-1.5">·</span>  <img src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`} alt="" className="w-4 h-auto inline-block rounded-sm mr-1.5 -mt-0.5" />
+                    {c?.name || profile.country}
+                  </p>
+                ) : (
+                  <p className="text-zinc-400 text-sm mt-2 text-center">
+                    <img src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`} alt="" className="w-4 h-auto inline-block rounded-sm mr-1.5 -mt-0.5" />
+                    {c?.name || profile.country}
+                  </p>
+                )
+              })()
+            ) : (
+              profile.show_age && profile.birth_date && (
+                <p className="text-zinc-400 text-sm mt-2">{new Date().getFullYear() - new Date(profile.birth_date).getFullYear()} años</p>
+              )
+            )}
             {profile.created_at && (
               <p className="text-zinc-600 text-xs mt-2">
                 Miembro desde el {new Date(profile.created_at).getDate()} de {MONTHS[new Date(profile.created_at).getMonth()]} del {new Date(profile.created_at).getFullYear()}
@@ -160,65 +195,77 @@ export default function PublicProfile() {
             </div>
           </div>
 
-          <div className="flex gap-3">
-            {profile.is_following ? (
-              <button
-                onClick={handleUnfollow}
-                disabled={actionLoading}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
-              >
-                {actionLoading ? '...' : 'Dejar de seguir'}
-              </button>
-            ) : (
-              <button
-                onClick={handleFollow}
-                disabled={actionLoading}
-                className="rounded-lg px-5 py-2 text-sm font-medium text-white transition disabled:opacity-50 hover:opacity-90"
-                style={{ backgroundColor: '#6659ff' }}
-              >
-                {actionLoading ? '...' : 'Seguir'}
-              </button>
-            )}
-            {!profile.friend_request_status && (
-              <button
-                onClick={handleSendRequest}
-                disabled={actionLoading}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
-              >
-                {actionLoading ? '...' : 'Enviar solicitud'}
-              </button>
-            )}
-            {profile.friend_request_status === 'pending' && (
-              <span className="bg-zinc-800 text-zinc-500 rounded-lg px-5 py-2 text-sm">
-                Solicitud enviada
-              </span>
-            )}
-            {profile.friend_request_status === 'accepted' && (
-              <span className="bg-zinc-800 text-zinc-500 rounded-lg px-5 py-2 text-sm">
-                Amigos
-              </span>
-            )}
-            {profile.friend_request_status === 'rejected' && (
-              <button
-                onClick={handleSendRequest}
-                disabled={actionLoading}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
-              >
-                {actionLoading ? '...' : 'Enviar solicitud'}
-              </button>
-            )}
-          </div>
-          {profile.friend_request_status === 'accepted' && (
+          {currentUser?.username?.toLowerCase() === username.toLowerCase() ? (
             <button
-              onClick={handleSendMessage}
+              onClick={() => navigate('/profile/edit')}
               className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
               style={{ backgroundColor: '#6659ff' }}
             >
-              <svg className="inline-block w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-              </svg>
-              Enviar mensaje
+              Editar perfil
             </button>
+          ) : (
+            <>
+              <div className="flex gap-3">
+                {profile.is_following ? (
+                  <button
+                    onClick={handleUnfollow}
+                    disabled={actionLoading}
+                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
+                  >
+                    {actionLoading ? '...' : 'Dejar de seguir'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleFollow}
+                    disabled={actionLoading}
+                    className="rounded-lg px-5 py-2 text-sm font-medium text-white transition disabled:opacity-50 hover:opacity-90"
+                    style={{ backgroundColor: '#6659ff' }}
+                  >
+                    {actionLoading ? '...' : 'Seguir'}
+                  </button>
+                )}
+                {!profile.friend_request_status && (
+                  <button
+                    onClick={handleSendRequest}
+                    disabled={actionLoading}
+                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
+                  >
+                    {actionLoading ? '...' : 'Enviar solicitud'}
+                  </button>
+                )}
+                {profile.friend_request_status === 'pending' && (
+                  <span className="bg-zinc-800 text-zinc-500 rounded-lg px-5 py-2 text-sm">
+                    Solicitud enviada
+                  </span>
+                )}
+                {profile.friend_request_status === 'accepted' && (
+                  <span className="bg-zinc-800 text-zinc-500 rounded-lg px-5 py-2 text-sm">
+                    Amigos
+                  </span>
+                )}
+                {profile.friend_request_status === 'rejected' && (
+                  <button
+                    onClick={handleSendRequest}
+                    disabled={actionLoading}
+                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
+                  >
+                    {actionLoading ? '...' : 'Enviar solicitud'}
+                  </button>
+                )}
+              </div>
+              {profile.friend_request_status === 'accepted' && (
+                <button
+                  onClick={handleSendMessage}
+                  className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                  style={{ backgroundColor: '#6659ff' }}
+                >
+                  <svg className="inline-block w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                  </svg>
+                  Enviar mensaje
+                </button>
+              )}
+            </>
           )}
 
           {error && (

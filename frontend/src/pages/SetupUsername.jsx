@@ -15,14 +15,8 @@ export default function SetupUsername() {
   const fileInputRef = useRef(null)
 
   const handleUsernameChange = (e) => {
-    const value = e.target.value
-    if (value === '' || value.startsWith('@')) {
-      setUsername(value)
-      setError(null)
-    } else {
-      setUsername('@' + value.replace(/[^a-zA-Z0-9_]/g, ''))
-      setError(null)
-    }
+    setUsername(e.target.value.replace(/[^a-zA-Z0-9_.]/g, ''))
+    setError(null)
   }
 
   const handleAvatarSelect = (e) => {
@@ -53,15 +47,16 @@ export default function SetupUsername() {
     e.preventDefault()
     setError(null)
 
-    if (!username.startsWith('@') || username.length < 2 || username.length > 20 || !/^@[a-zA-Z0-9_]+$/.test(username)) {
-      setError('Elegí un nombre de usuario válido (entre 2 y 20 caracteres, solo letras, números y guión bajo)')
+    const fullUsername = '@' + username
+    if (fullUsername.length < 2 || fullUsername.length > 21 || !/^@(?=.*[a-zA-Z])[a-zA-Z0-9_.]+$/.test(fullUsername)) {
+      setError('Elegí un nombre de usuario válido (de 1 a 20 caracteres, al menos 1 letra, solo letras, números, guión bajo y punto)')
       return
     }
 
     setLoading(true)
 
     try {
-      const body = { username }
+      const body = { username: fullUsername }
       if (avatarPreview) body.avatar = avatarPreview
 
       const res = await api('/api/auth/setup-username', {
@@ -124,16 +119,19 @@ export default function SetupUsername() {
 
           <div>
             <label htmlFor="username" className="block text-sm text-zinc-400 mb-1">Nombre de usuario</label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={handleUsernameChange}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition"
-              placeholder="@usuario"
-              autoFocus
-              required
-            />
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none">@</span>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={handleUsernameChange}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition"
+                placeholder="usuario"
+                autoFocus
+                required
+              />
+            </div>
           </div>
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <button

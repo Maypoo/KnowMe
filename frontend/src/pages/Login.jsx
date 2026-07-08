@@ -1,10 +1,13 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Plasma from '../components/Plasma'
 
 export default function Login() {
+  const location = useLocation()
   const [error, setError] = useState(null)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const deleted = location.state?.deleted
 
   const handleGoogle = async () => {
     setGoogleLoading(true)
@@ -42,6 +45,7 @@ export default function Login() {
             Conectate con tus amigos, conocé gente nueva y conversá en tiempo real, el tiempo que quieras.
           </p>
         </div>
+        {deleted && <p className="text-green-400 text-sm text-center mb-4">Cuenta eliminada correctamente.</p>}
         {error && <p className="text-red-400 text-sm text-center mb-4">{error}</p>}
         <button
           type="button"

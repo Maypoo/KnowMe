@@ -3,7 +3,7 @@ import Login from './pages/Login'
 import Home from './pages/Home'
 import AuthCallback from './pages/AuthCallback'
 import SetupUsername from './pages/SetupUsername'
-import Profile from './pages/Profile'
+import EditProfile from './pages/EditProfile'
 import PublicProfile from './pages/PublicProfile'
 
 function NotFound() {
@@ -30,7 +30,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/setup-username" element={<SetupUsername />} />
-      <Route path="/profile" element={<Profile />} />
+      <Route path="/profile/edit" element={<EditProfile />} />
       <Route path="/:username" element={<PublicProfile />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
