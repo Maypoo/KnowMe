@@ -3,7 +3,9 @@ const BASE_URL = import.meta.env.VITE_API_URL || ''
 function resolveUrl(path) {
   if (!BASE_URL) return path
   const url = new URL(BASE_URL)
-  url.hostname = window.location.hostname
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+    url.hostname = window.location.hostname
+  }
   return `${url.toString().replace(/\/$/, '')}${path}`
 }
 
