@@ -49,6 +49,7 @@ export default function Home() {
   const [activeChat, setActiveChat] = useState(saved.current?.activeChat ?? null)
   const [chatsRefreshTrigger, setChatsRefreshTrigger] = useState(0)
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0)
   const dropdownRef = useRef(null)
   const voiceCallRef = useRef(null)
 
@@ -117,6 +118,18 @@ export default function Home() {
 
   useEffect(() => {
     if (!profile) return
+    api('/api/chats/unread/total')
+      .then(res => res.json())
+      .then(data => {
+        if (data.total !== undefined) {
+          setUnreadMessagesCount(data.total)
+        }
+      })
+      .catch(() => {})
+  }, [profile, chatsRefreshTrigger])
+
+  useEffect(() => {
+    if (!profile) return
     api('/api/friends/requests/count')
       .then(res => res.json())
       .then(data => {
@@ -167,6 +180,7 @@ export default function Home() {
 
   const handleBackFromConversation = () => {
     setActiveChat(null)
+    setChatsRefreshTrigger(t => t + 1)
   }
 
   const handleBackFromNewChat = () => {
@@ -268,7 +282,7 @@ export default function Home() {
               {chatsView === 'new' ? (
                 <NewChat onSelectFriend={handleSelectFriend} onBack={handleBackFromNewChat} />
               ) : activeChat ? (
-                <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} />
+                <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} onChatRead={() => setChatsRefreshTrigger(t => t + 1)} />
               ) : (
                 <section className="flex-1 flex flex-col min-h-0">
                   <div className="flex items-center justify-between mb-4">
@@ -341,11 +355,25 @@ export default function Home() {
               setActiveChat(null)
               setChatsView('list')
             }}
-            className={`transition ${view === 'chats' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
+            className={`relative transition ${view === 'chats' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
+            {unreadMessagesCount > 0 && (
+              <span
+                className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
+                style={{
+                  backgroundColor: '#6659ff',
+                  color: '#fff',
+                  minWidth: 18,
+                  height: 18,
+                  padding: '0 5px',
+                }}
+              >
+                {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+              </span>
+            )}
           </button>
         </div>
       </div>

@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
 
-export default function ChatConversation({ chat, onBack, profile, onStartCall }) {
+export default function ChatConversation({ chat, onBack, profile, onStartCall, onChatRead }) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -29,7 +29,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
       })
       .finally(() => setLoading(false))
 
-    api(`/api/chats/${chat.id}/read`, { method: 'POST' }).catch(() => {})
+    api(`/api/chats/${chat.id}/read`, { method: 'POST' }).then(() => onChatRead?.()).catch(() => {})
   }, [chat?.id])
 
   useEffect(() => {

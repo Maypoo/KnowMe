@@ -1464,6 +1464,44 @@ app.post('/api/chats', auth, asyncHandler(async (req, res) => {
   res.json({ chat: chatData })
 }))
 
+app.get('/api/chats/unread/total', auth, asyncHandler(async (req, res) => {
+  const { data: participations } = await supabase
+    .from('chat_participants')
+    .select('chat_id, last_read_at')
+    .eq('user_id', req.user.id)
+
+  if (!participations || participations.length === 0) {
+    return res.json({ total: 0 })
+  }
+
+  const chatIds = participations.map(p => p.chat_id)
+
+  const { data: chats } = await supabase
+    .from('chats')
+    .select('id, created_at')
+    .in('id', chatIds)
+
+  const chatCreatedMap = {}
+  if (chats) {
+    for (const c of chats) {
+      chatCreatedMap[c.id] = c.created_at
+    }
+  }
+
+  let total = 0
+  for (const p of participations) {
+    const { count } = await supabase
+      .from('chat_messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('chat_id', p.chat_id)
+      .neq('sender_id', req.user.id)
+      .gt('created_at', p.last_read_at || chatCreatedMap[p.chat_id] || p.created_at)
+    total += (count || 0)
+  }
+
+  res.json({ total })
+}))
+
 app.get('/api/chats/:chatId/messages', auth, asyncHandler(async (req, res) => {
   const { chatId } = req.params
 
