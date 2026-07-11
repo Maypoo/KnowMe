@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import Plasma from '../components/Plasma'
+
 
 export default function Login() {
   const location = useLocation()
@@ -28,16 +28,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      <div className="absolute inset-0 -z-10">
-        <Plasma
-          color="#6659ff"
-          speed={0.6}
-          direction="forward"
-          scale={2}
-          opacity={0.8}
-          mouseInteractive={true}
-        />
-      </div>
+
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-5xl font-bold text-zinc-100 tracking-tight mb-4">KnowMe</h1>
