@@ -565,31 +565,10 @@ app.post('/api/friends/request', auth, asyncHandler(async (req, res) => {
       return res.status(409).json({ error: 'Ya hay una solicitud pendiente' })
     }
     if (existing.status === 'rejected') {
-      const { error: updateError } = await supabase
+      await supabase
         .from('friend_requests')
-        .update({ status: 'pending', updated_at: new Date().toISOString() })
+        .delete()
         .eq('id', existing.id)
-
-      if (updateError) {
-        return res.status(400).json({ error: 'Error al enviar la solicitud' })
-      }
-
-      const { data: senderProfile } = await supabase
-        .from('profiles')
-        .select('username, display_name, avatar_url')
-        .eq('id', req.user.id)
-        .maybeSingle()
-
-      const io = getIO()
-      if (io) {
-        io.to(target.id).emit('friend_request_received', {
-          id: existing.id,
-          sender: { id: req.user.id, username: sanitize(senderProfile?.display_name || senderProfile?.username || 'Desconocido'), avatar_url: senderProfile?.avatar_url || null },
-          status: 'pending',
-        })
-      }
-
-      return res.json({ message: 'Solicitud enviada', requestId: existing.id })
     }
   }
 
@@ -691,25 +670,47 @@ app.post('/api/friends/respond', auth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Esta solicitud ya fue respondida' })
   }
 
+  if (action === 'rejected') {
+    const { error: deleteError } = await supabase
+      .from('friend_requests')
+      .delete()
+      .eq('id', requestId)
+
+    if (deleteError) {
+      return res.status(400).json({ error: 'Error al rechazar la solicitud' })
+    }
+
+    const io = getIO()
+    if (io) {
+      io.to(request.sender_id).emit('friend_request_updated', {
+        id: requestId,
+        status: 'rejected',
+        responderId: req.user.id,
+      })
+    }
+
+    return res.json({ message: 'Solicitud rechazada' })
+  }
+
   const { error: updateError } = await supabase
     .from('friend_requests')
-    .update({ status: action, updated_at: new Date().toISOString() })
+    .update({ status: 'accepted', updated_at: new Date().toISOString() })
     .eq('id', requestId)
 
   if (updateError) {
-    return res.status(400).json({ error: 'Error al responder la solicitud' })
+    return res.status(400).json({ error: 'Error al aceptar la solicitud' })
   }
 
   const io = getIO()
   if (io) {
     io.to(request.sender_id).emit('friend_request_updated', {
       id: requestId,
-      status: action,
+      status: 'accepted',
       responderId: req.user.id,
     })
   }
 
-  res.json({ message: action === 'accepted' ? 'Solicitud aceptada' : 'Solicitud rechazada' })
+  res.json({ message: 'Solicitud aceptada' })
 }))
 
 app.get('/api/friends', auth, asyncHandler(async (req, res) => {

@@ -14,7 +14,8 @@ export default function PublicProfile() {
   const [loading, setLoading] = useState(true)
   const [currentUserLoading, setCurrentUserLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [actionLoading, setActionLoading] = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
+  const [requestLoading, setRequestLoading] = useState(false)
   const [showFollowers, setShowFollowers] = useState(false)
   const [showFriends, setShowFriends] = useState(false)
 
@@ -49,7 +50,7 @@ export default function PublicProfile() {
   }, [username])
 
   const handleFollow = async () => {
-    setActionLoading(true)
+    setFollowLoading(true)
     try {
       const res = await api(`/api/follow/${encodeURIComponent(username)}`, { method: 'POST' })
       if (res.ok) {
@@ -57,12 +58,12 @@ export default function PublicProfile() {
       }
     } catch {
     } finally {
-      setActionLoading(false)
+      setFollowLoading(false)
     }
   }
 
   const handleUnfollow = async () => {
-    setActionLoading(true)
+    setFollowLoading(true)
     try {
       const res = await api(`/api/follow/${encodeURIComponent(username)}`, { method: 'DELETE' })
       if (res.ok) {
@@ -70,7 +71,7 @@ export default function PublicProfile() {
       }
     } catch {
     } finally {
-      setActionLoading(false)
+      setFollowLoading(false)
     }
   }
 
@@ -89,7 +90,7 @@ export default function PublicProfile() {
   }
 
   const handleSendRequest = async () => {
-    setActionLoading(true)
+    setRequestLoading(true)
     try {
       const res = await api('/api/friends/request', {
         method: 'POST',
@@ -103,7 +104,7 @@ export default function PublicProfile() {
       }
     } catch {
     } finally {
-      setActionLoading(false)
+      setRequestLoading(false)
     }
   }
 
@@ -209,28 +210,28 @@ export default function PublicProfile() {
                 {profile.is_following ? (
                   <button
                     onClick={handleUnfollow}
-                    disabled={actionLoading}
+                    disabled={followLoading}
                     className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
                   >
-                    {actionLoading ? '...' : 'Dejar de seguir'}
+                    {followLoading ? 'Siguiendo...' : 'Dejar de seguir'}
                   </button>
                 ) : (
                   <button
                     onClick={handleFollow}
-                    disabled={actionLoading}
+                    disabled={followLoading}
                     className="rounded-lg px-5 py-2 text-sm font-medium text-white transition disabled:opacity-50 hover:opacity-90"
                     style={{ backgroundColor: '#6659ff' }}
                   >
-                    {actionLoading ? '...' : 'Seguir'}
+                    {followLoading ? 'Siguiendo...' : 'Seguir'}
                   </button>
                 )}
                 {!profile.friend_request_status && (
                   <button
                     onClick={handleSendRequest}
-                    disabled={actionLoading}
+                    disabled={requestLoading}
                     className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
                   >
-                    {actionLoading ? '...' : 'Enviar solicitud'}
+                    {requestLoading ? 'Enviando...' : 'Enviar solicitud'}
                   </button>
                 )}
                 {profile.friend_request_status === 'pending' && (
@@ -246,10 +247,10 @@ export default function PublicProfile() {
                 {profile.friend_request_status === 'rejected' && (
                   <button
                     onClick={handleSendRequest}
-                    disabled={actionLoading}
+                    disabled={requestLoading}
                     className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
                   >
-                    {actionLoading ? '...' : 'Enviar solicitud'}
+                    {requestLoading ? 'Enviando...' : 'Enviar solicitud'}
                   </button>
                 )}
               </div>

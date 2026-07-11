@@ -10,13 +10,27 @@ function resolveUrl(path) {
 }
 
 export async function api(path, options = {}) {
-  const res = await fetch(resolveUrl(path), {
-    credentials: 'include',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
-  return res
+  const MAX_RETRIES = 2
+  let lastError
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(resolveUrl(path), {
+        credentials: 'include',
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      })
+      return res
+    } catch (err) {
+      lastError = err
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+      }
+    }
+  }
+
+  throw lastError
 }
