@@ -51,6 +51,15 @@ export default function Home() {
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0)
   const dropdownRef = useRef(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [searched, setSearched] = useState(false)
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('knowme_recent_searches') || '[]')
+    } catch { return [] }
+  })
   const voiceCallRef = useRef(null)
 
   useEffect(() => {
@@ -95,6 +104,10 @@ export default function Home() {
       setRefreshTrigger(t => t + 1)
     }
 
+    const handleRequestCancelled = () => {
+      setRefreshTrigger(t => t + 1)
+    }
+
     const handleNewMessage = () => {
       setChatsRefreshTrigger(t => t + 1)
     }
@@ -105,12 +118,14 @@ export default function Home() {
 
     socket.on('friend_request_received', handleRequestReceived)
     socket.on('friend_request_updated', handleRequestUpdated)
+    socket.on('friend_request_cancelled', handleRequestCancelled)
     socket.on('new_message', handleNewMessage)
     socket.on('chat_created', handleChatCreated)
 
     return () => {
       socket.off('friend_request_received', handleRequestReceived)
       socket.off('friend_request_updated', handleRequestUpdated)
+      socket.off('friend_request_cancelled', handleRequestCancelled)
       socket.off('new_message', handleNewMessage)
       socket.off('chat_created', handleChatCreated)
     }
@@ -187,6 +202,33 @@ export default function Home() {
     setChatsView('list')
   }
 
+  const addToRecentSearches = (value, type) => {
+    setRecentSearches(prev => {
+      const filtered = prev.filter(s => s.value !== value || s.type !== type)
+      const next = [{ type, value }, ...filtered].slice(0, 10)
+      localStorage.setItem('knowme_recent_searches', JSON.stringify(next))
+      return next
+    })
+  }
+
+  const handleSearch = async (e, query) => {
+    e.preventDefault()
+    const q = query ?? searchQuery
+    if (q.length < 2) return
+    setSearchQuery(q)
+    setSearched(true)
+    setSearching(true)
+    try {
+      const res = await api(`/api/users/search?q=${encodeURIComponent(q)}`)
+      const data = await res.json()
+      setSearchResults(data.users || [])
+    } catch {
+      setSearchResults([])
+    }
+    setSearching(false)
+    addToRecentSearches(q, 'query')
+  }
+
   const handleSelectFriend = async (friend) => {
     try {
       const res = await api('/api/chats', {
@@ -219,6 +261,15 @@ export default function Home() {
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-semibold">KnowMe</h1>
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => { setView('search'); setSearchQuery(''); setSearchResults([]); setSearched(false) }}
+              className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </button>
             <div className="relative" ref={dropdownRef}>
               <button onClick={() => setDropdownOpen(!dropdownOpen)} className="flex items-center gap-3 outline-none">
                 <span className="text-zinc-500 text-sm">{profile.username}</span>
@@ -277,7 +328,122 @@ export default function Home() {
         )}
 
         <div className="pb-20 flex-1 flex flex-col min-h-0">
-          {view === 'chats' ? (
+          {view === 'search' ? (
+            <section className="flex-1 flex flex-col">
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  onClick={() => setView('friends')}
+                  className="rounded-full p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12" />
+                    <polyline points="12 19 5 12 12 5" />
+                  </svg>
+                </button>
+                <h2 className="text-zinc-100 text-lg font-semibold">Buscar usuarios</h2>
+              </div>
+              <form onSubmit={handleSearch} className="flex gap-2 mb-6">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Nombre de usuario..."
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-zinc-600 transition"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={searching || searchQuery.length < 2}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#6659ff' }}
+                >
+                  Buscar
+                </button>
+              </form>
+              <div className="flex-1 overflow-y-auto">
+                {searching && (
+                  <p className="text-zinc-500 text-sm text-center py-8">Buscando...</p>
+                )}
+                {!searching && searchResults.length > 0 && (
+                  <div className="space-y-1">
+                    {searchResults.map(user => (
+                      <button
+                        key={user.id}
+                        onClick={() => { addToRecentSearches(user.username, 'user'); navigate('/' + user.username) }}
+                        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-zinc-800 transition rounded-lg"
+                      >
+                        <Avatar src={user.avatar_url} size={40} />
+                        <span className="text-sm text-zinc-300">{user.username}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!searching && searched && searchResults.length === 0 && (
+                  <p className="text-zinc-500 text-sm text-center py-8">Sin resultados</p>
+                )}
+                {!searching && !searched && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-zinc-500 text-sm font-medium">Búsquedas recientes</h3>
+                      {recentSearches.length > 0 && (
+                        <button
+                          onClick={() => { setRecentSearches([]); localStorage.removeItem('knowme_recent_searches') }}
+                          className="text-xs text-zinc-600 hover:text-zinc-400 transition"
+                        >
+                          Limpiar todo
+                        </button>
+                      )}
+                    </div>
+                    {recentSearches.length === 0 ? (
+                      <p className="text-zinc-600 text-sm text-center py-8">No hay búsquedas recientes</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {recentSearches.map((entry, i) => (
+                          <div
+                            key={`${entry.type}-${entry.value}-${i}`}
+                            className="group flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+                            onClick={() => {
+                              setSearchQuery('')
+                              setSearchResults([])
+                              setSearched(false)
+                              if (entry.type === 'user') {
+                                navigate('/' + entry.value)
+                              } else {
+                                const synthetic = { preventDefault: () => {} }
+                                handleSearch(synthetic, entry.value)
+                              }
+                            }}
+                          >
+                            {entry.type === 'user' ? (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600 shrink-0">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                              </svg>
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600 shrink-0">
+                                <circle cx="11" cy="11" r="8" />
+                                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                              </svg>
+                            )}
+                            <span className="flex-1 text-sm text-zinc-400 group-hover:text-zinc-300 transition truncate">{entry.value}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setRecentSearches(prev => { const next = prev.filter(s => s.value !== entry.value || s.type !== entry.type); localStorage.setItem('knowme_recent_searches', JSON.stringify(next)); return next }) }}
+                              className="p-1 rounded text-zinc-600 hover:text-zinc-300 hover:bg-zinc-700 transition"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          ) : view === 'chats' ? (
             <>
               {chatsView === 'new' ? (
                 <NewChat onSelectFriend={handleSelectFriend} onBack={handleBackFromNewChat} />
@@ -339,7 +505,7 @@ export default function Home() {
         <div className="bg-zinc-900 rounded-2xl px-8 py-3 flex items-center gap-12 shadow-lg">
           <button
             onClick={() => { setView('friends'); setTab('friends') }}
-            className={`transition ${view === 'friends' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
+            className={`relative transition ${view === 'friends' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -347,6 +513,20 @@ export default function Home() {
               <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
+            {pendingRequestsCount > 0 && (
+              <span
+                className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
+                style={{
+                  backgroundColor: '#6659ff',
+                  color: '#fff',
+                  minWidth: 18,
+                  height: 18,
+                  padding: '0 5px',
+                }}
+              >
+                {pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}
+              </span>
+            )}
           </button>
 
           <button

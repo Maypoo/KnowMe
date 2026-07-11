@@ -520,7 +520,6 @@ app.get('/api/users/search', auth, asyncHandler(async (req, res) => {
     .from('profiles')
     .select('id, username, display_name, avatar_url')
     .ilike('username', `%${escapeILike(sanitized.toLowerCase())}%`)
-    .neq('id', req.user.id)
     .limit(10)
 
   const mapped = (users || []).map(u => ({ ...u, username: u.display_name || u.username }))
