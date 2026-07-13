@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import ColorBends from '../components/ColorBends'
+import DotField from '../components/DotField'
 
 
 export default function Login() {
@@ -29,7 +31,41 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
 
-      <div className="w-full max-w-sm">
+      <div className="absolute inset-0 w-full h-full">
+        <ColorBends
+          colors={["#6659ff"]}
+          rotation={90}
+          autoRotate={0}
+          speed={0.2}
+          scale={1}
+          frequency={1}
+          warpStrength={1}
+          mouseInfluence={1}
+          parallax={0.5}
+          noise={0.15}
+          iterations={1}
+          intensity={1.5}
+          bandWidth={0.5}
+          transparent
+        />
+      </div>
+
+      <div className="absolute inset-0 w-full h-full z-[5]">
+        <DotField
+          dotRadius={1.5}
+          dotSpacing={14}
+          cursorRadius={500}
+          cursorForce={0.10}
+          bulgeOnly={true}
+          bulgeStrength={67}
+          glowRadius={160}
+          glowColor="transparent"
+          sparkle={false}
+          waveAmplitude={0}
+        />
+      </div>
+
+      <div className="relative z-10 w-full max-w-sm">
         <div className="text-center mb-8">
           <h1 className="text-5xl font-bold text-zinc-100 tracking-tight mb-4">KnowMe</h1>
           <p className="text-zinc-400 text-sm">
