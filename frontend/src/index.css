@@ -1,3 +1,13 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  h1 {
+    font-weight: 700;
+  }
+
+  h2, h3 {
+    font-weight: 600;
+  }
+}
