@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 const DAYS = ['Do','Lu','Ma','Mi','Ju','Vi','Sá']
@@ -104,9 +105,7 @@ export default function DatePicker({ value, onChange }) {
         <span className={displayText ? '' : 'text-zinc-500'}>
           {displayText || 'Seleccionar fecha'}
         </span>
-        <svg className={`w-4 h-4 text-zinc-500 transition ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
+        <ChevronDown size={16} className={`text-zinc-500 transition ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
@@ -119,9 +118,7 @@ export default function DatePicker({ value, onChange }) {
                   onClick={handlePrevMonth}
                   className="text-zinc-400 hover:text-zinc-200 p-1 transition"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
+                  <ChevronLeft size={16} />
                 </button>
                 <button
                   type="button"
@@ -136,9 +133,7 @@ export default function DatePicker({ value, onChange }) {
                   disabled={!canGoNextMonth}
                   className="text-zinc-400 hover:text-zinc-200 p-1 transition disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
+                  <ChevronRight size={16} />
                 </button>
               </div>
 
@@ -197,9 +192,7 @@ export default function DatePicker({ value, onChange }) {
                   disabled={viewYear <= minYear}
                   className="text-zinc-400 hover:text-zinc-200 p-1 transition disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
+                  <ChevronLeft size={16} />
                 </button>
                 <button
                   type="button"
@@ -214,9 +207,7 @@ export default function DatePicker({ value, onChange }) {
                   disabled={viewYear >= maxYear}
                   className="text-zinc-400 hover:text-zinc-200 p-1 transition disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
+                  <ChevronRight size={16} />
                 </button>
               </div>
 

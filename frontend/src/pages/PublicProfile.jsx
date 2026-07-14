@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Send } from 'lucide-react'
 import { api } from '../lib/api'
 import Avatar from '../components/Avatar'
 import countries from '../data/countries'
@@ -14,6 +15,7 @@ export default function PublicProfile() {
   const [loading, setLoading] = useState(true)
   const [currentUserLoading, setCurrentUserLoading] = useState(true)
   const [error, setError] = useState(null)
+
   const [followLoading, setFollowLoading] = useState(false)
   const [requestLoading, setRequestLoading] = useState(false)
   const [showFollowers, setShowFollowers] = useState(false)
@@ -23,7 +25,7 @@ export default function PublicProfile() {
     api('/api/auth/me')
       .then(res => res.ok ? res.json() : null)
       .then(data => setCurrentUser(data?.profile ?? null))
-      .catch(() => setCurrentUser(null))
+      .catch((err) => { console.error(err); setCurrentUser(null) })
       .finally(() => setCurrentUserLoading(false))
   }, [])
 
@@ -50,29 +52,25 @@ export default function PublicProfile() {
   }, [username])
 
   const handleFollow = async () => {
+    if (followLoading) return
     setFollowLoading(true)
-    try {
-      const res = await api(`/api/follow/${encodeURIComponent(username)}`, { method: 'POST' })
-      if (res.ok) {
-        setProfile(prev => ({ ...prev, is_following: true, follower_count: prev.follower_count + 1 }))
-      }
-    } catch {
-    } finally {
-      setFollowLoading(false)
+    setProfile(prev => ({ ...prev, is_following: true, follower_count: prev.follower_count + 1 }))
+    const res = await api(`/api/follow/${encodeURIComponent(username)}`, { method: 'POST' })
+    if (!res.ok) {
+      setProfile(prev => ({ ...prev, is_following: false, follower_count: prev.follower_count - 1 }))
     }
+    setFollowLoading(false)
   }
 
   const handleUnfollow = async () => {
+    if (followLoading) return
     setFollowLoading(true)
-    try {
-      const res = await api(`/api/follow/${encodeURIComponent(username)}`, { method: 'DELETE' })
-      if (res.ok) {
-        setProfile(prev => ({ ...prev, is_following: false, follower_count: prev.follower_count - 1 }))
-      }
-    } catch {
-    } finally {
-      setFollowLoading(false)
+    setProfile(prev => ({ ...prev, is_following: false, follower_count: prev.follower_count - 1 }))
+    const res = await api(`/api/follow/${encodeURIComponent(username)}`, { method: 'DELETE' })
+    if (!res.ok) {
+      setProfile(prev => ({ ...prev, is_following: true, follower_count: prev.follower_count + 1 }))
     }
+    setFollowLoading(false)
   }
 
   const handleSendMessage = async () => {
@@ -86,26 +84,25 @@ export default function PublicProfile() {
         sessionStorage.setItem('chatReturn', JSON.stringify({ activeChat: data.chat }))
         navigate('/')
       }
-    } catch {}
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   const handleSendRequest = async () => {
+    if (requestLoading) return
     setRequestLoading(true)
-    try {
-      const res = await api('/api/friends/request', {
-        method: 'POST',
-        body: JSON.stringify({ username }),
-      })
-      if (res.ok) {
-        setProfile(prev => ({ ...prev, friend_request_status: 'pending' }))
-      } else {
-        const data = await res.json()
-        if (data.error) setError(data.error)
-      }
-    } catch {
-    } finally {
-      setRequestLoading(false)
+    setProfile(prev => ({ ...prev, friend_request_status: 'pending' }))
+    const res = await api('/api/friends/request', {
+      method: 'POST',
+      body: JSON.stringify({ username }),
+    })
+    if (!res.ok) {
+      setProfile(prev => ({ ...prev, friend_request_status: null }))
+      const data = await res.json()
+      if (data.error) setError(data.error)
     }
+    setRequestLoading(false)
   }
 
   if (loading || currentUserLoading) {
@@ -125,7 +122,7 @@ export default function PublicProfile() {
             onClick={() => navigate('/')}
             className="text-zinc-500 hover:text-zinc-300 text-sm transition"
           >
-            ← Volver al inicio
+            <ArrowLeft size={14} className="inline -mt-0.5" /> Volver al inicio
           </button>
         </div>
       </div>
@@ -141,7 +138,7 @@ export default function PublicProfile() {
           onClick={() => navigate('/')}
           className="text-zinc-500 hover:text-zinc-300 text-sm transition mb-8"
         >
-          ← Volver
+          <ArrowLeft size={14} className="inline -mt-0.5" /> Volver
         </button>
         <div className="flex flex-col items-center gap-4">
           <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-zinc-800" />
@@ -213,16 +210,16 @@ export default function PublicProfile() {
                     disabled={followLoading}
                     className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
                   >
-                    {followLoading ? 'Siguiendo...' : 'Dejar de seguir'}
+                    Dejar de seguir
                   </button>
                 ) : (
                   <button
                     onClick={handleFollow}
                     disabled={followLoading}
-                    className="rounded-lg px-5 py-2 text-sm font-medium text-white transition disabled:opacity-50 hover:opacity-90"
+                    className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
                     style={{ backgroundColor: '#6659ff' }}
                   >
-                    {followLoading ? 'Siguiendo...' : 'Seguir'}
+                    Seguir
                   </button>
                 )}
                 {!profile.friend_request_status && (
@@ -231,7 +228,7 @@ export default function PublicProfile() {
                     disabled={requestLoading}
                     className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
                   >
-                    {requestLoading ? 'Enviando...' : 'Enviar solicitud'}
+                    Enviar solicitud
                   </button>
                 )}
                 {profile.friend_request_status === 'pending' && (
@@ -250,7 +247,7 @@ export default function PublicProfile() {
                     disabled={requestLoading}
                     className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
                   >
-                    {requestLoading ? 'Enviando...' : 'Enviar solicitud'}
+                    Enviar solicitud
                   </button>
                 )}
               </div>
@@ -260,9 +257,7 @@ export default function PublicProfile() {
                   className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
                   style={{ backgroundColor: '#6659ff' }}
                 >
-                  <svg className="inline-block w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-                  </svg>
+                  <Send size={16} className="inline-block mr-1.5" />
                   Enviar mensaje
                 </button>
               )}

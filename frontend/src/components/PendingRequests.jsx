@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import { socket } from '../lib/socket'
 import Avatar from './Avatar'
 
 export default function PendingRequests({ refreshTrigger }) {
@@ -17,7 +19,8 @@ export default function PendingRequests({ refreshTrigger }) {
       if (res.ok) {
         setRequests(data.requests)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
     } finally {
       setLoading(false)
     }
@@ -27,6 +30,18 @@ export default function PendingRequests({ refreshTrigger }) {
     fetchPending()
   }, [fetchPending, refreshTrigger])
 
+  useEffect(() => {
+    const removeRequest = (data) => {
+      setRequests(prev => prev.filter(r => r.id !== data.id))
+    }
+    socket.on('friend_request_updated', removeRequest)
+    socket.on('friend_request_cancelled', removeRequest)
+    return () => {
+      socket.off('friend_request_updated', removeRequest)
+      socket.off('friend_request_cancelled', removeRequest)
+    }
+  }, [])
+
   const handleCancel = async () => {
     if (!confirming) return
     setCancelling(true)
@@ -35,7 +50,8 @@ export default function PendingRequests({ refreshTrigger }) {
       if (res.ok) {
         setRequests(prev => prev.filter(r => r.id !== confirming.id))
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
     } finally {
       setCancelling(false)
       setConfirming(null)
@@ -61,9 +77,9 @@ export default function PendingRequests({ refreshTrigger }) {
               </button>
               <button
                 onClick={() => setConfirming(r)}
-                className="text-zinc-600 hover:text-red-400 transition text-lg leading-none"
-              >
-                ×
+                    className="text-zinc-600 hover:text-red-400 transition"
+                  >
+                    <X size={18} />
               </button>
             </li>
           ))}
@@ -82,14 +98,14 @@ export default function PendingRequests({ refreshTrigger }) {
                 onClick={() => setConfirming(null)}
                 className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-4 py-2 text-sm transition"
               >
-                Volver
+                Cancelar
               </button>
               <button
                 onClick={handleCancel}
                 disabled={cancelling}
                 className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm transition disabled:opacity-50"
               >
-                {cancelling ? 'Cancelando...' : 'Cancelar'}
+                {cancelling ? 'Cancelando...' : 'Aceptar'}
               </button>
             </div>
           </div>

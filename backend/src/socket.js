@@ -17,7 +17,8 @@ export function setupSocket(server) {
             hostname.startsWith('192.168.') || hostname.startsWith('10.') ||
             hostname.startsWith('172.')
           callback(null, isLocal)
-        } catch {
+        } catch (err) {
+          console.error(err)
           callback(null, false)
         }
       },
@@ -84,7 +85,8 @@ export function setupSocket(server) {
           },
           sdp,
         })
-      } catch {
+      } catch (err) {
+        console.error(err)
         inCall.delete(socket.user.id)
         io.to(socket.user.id).emit('call:busy', { targetUserId: data?.targetUserId })
       }
@@ -99,7 +101,7 @@ export function setupSocket(server) {
         io.to(targetUserId).emit('signal:answer', {
           sdp,
         })
-      } catch {}
+      } catch (err) { console.error(err) }
     })
 
     socket.on('signal:ice-candidate', (data) => {
@@ -110,7 +112,7 @@ export function setupSocket(server) {
         io.to(targetUserId).emit('signal:ice-candidate', {
           candidate,
         })
-      } catch {}
+      } catch (err) { console.error(err) }
     })
 
     socket.on('call:end', (data) => {
@@ -123,7 +125,7 @@ export function setupSocket(server) {
         if (targetUserId) {
           io.to(targetUserId).emit('call:end', {})
         }
-      } catch {}
+      } catch (err) { console.error(err) }
     })
 
     socket.on('disconnect', () => {

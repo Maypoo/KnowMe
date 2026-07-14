@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ChevronLeft } from 'lucide-react'
 import { api } from '../lib/api'
 import Avatar from './Avatar'
 
@@ -20,9 +21,7 @@ export default function NewChat({ onSelectFriend, onBack }) {
     <div className="flex-1 flex flex-col">
       <div className="flex items-center gap-3 mb-4">
         <button onClick={onBack} className="text-zinc-400 hover:text-zinc-100 transition">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
+          <ChevronLeft size={24} />
         </button>
         <span className="text-zinc-100 text-sm font-medium">Nuevo chat</span>
       </div>

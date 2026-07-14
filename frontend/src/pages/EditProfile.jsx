@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ArrowLeft, Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { api } from '../lib/api'
 import Avatar from '../components/Avatar'
@@ -48,7 +49,7 @@ export default function EditProfile() {
         setShowCountry(data.profile.show_country || false)
         setUsernameLimits(data.limits || null)
       })
-      .catch(() => navigate('/login'))
+      .catch((err) => { console.error(err); navigate('/login') })
       .finally(() => setLoading(false))
   }, [navigate])
 
@@ -79,7 +80,8 @@ export default function EditProfile() {
         } else {
           setProfile(data.profile)
         }
-      } catch {
+      } catch (err) {
+        console.error(err)
         setError('Error de conexión con el servidor')
       } finally {
         setUpdatingAvatar(false)
@@ -106,7 +108,8 @@ export default function EditProfile() {
         setProfile(data.profile)
         setDisplayNameInput(data.profile.username.replace(/^@/, ''))
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
       setError('Error de conexión con el servidor')
     } finally {
       setUpdatingDisplayName(false)
@@ -125,7 +128,8 @@ export default function EditProfile() {
       const data = await res.json()
       setUsernameAvailable(data.available)
       if (!data.available) setUsernameError(data.error)
-    } catch {
+    } catch (err) {
+      console.error(err)
       setUsernameError('Error al verificar disponibilidad')
     }
   }
@@ -167,7 +171,8 @@ export default function EditProfile() {
         setUsernameError(null)
         setUsernameLimits(data.limits || null)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
       setError('Error de conexión con el servidor')
     } finally {
       setUpdatingUsername(false)
@@ -192,7 +197,8 @@ export default function EditProfile() {
         setProfile(data.profile)
         setBio(data.profile.bio || '')
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
       setError('Error de conexión con el servidor')
     } finally {
       setUpdatingBio(false)
@@ -222,7 +228,8 @@ export default function EditProfile() {
         setBirthDate(data.profile.birth_date || '')
         setShowAge(data.profile.show_age || false)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
       setError('Error de conexión con el servidor')
     } finally {
       setUpdatingBirth(false)
@@ -251,7 +258,8 @@ export default function EditProfile() {
         setCountry(data.profile.country || null)
         setShowCountry(data.profile.show_country || false)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
       setError('Error de conexión con el servidor')
     } finally {
       setUpdatingCountry(false)
@@ -291,7 +299,7 @@ export default function EditProfile() {
           onClick={() => navigate('/' + profile.username)}
           className="text-zinc-500 hover:text-zinc-300 text-sm transition mb-8"
         >
-          ← Volver al perfil
+          <ArrowLeft size={14} className="inline -mt-0.5" /> Volver al perfil
         </button>
 
         <h1 className="text-xl font-semibold mb-8 text-center">Editar perfil</h1>
@@ -304,10 +312,7 @@ export default function EditProfile() {
               disabled={updatingAvatar}
               className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
             >
-              <svg className="w-6 h-6 text-zinc-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+              <Camera size={24} className="text-zinc-200" />
             </button>
             <input
               ref={fileInputRef}

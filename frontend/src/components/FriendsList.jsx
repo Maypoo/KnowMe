@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import Avatar from './Avatar'
 
@@ -18,7 +19,8 @@ export default function FriendsList({ refreshTrigger, onUpdate }) {
       if (res.ok) {
         setFriends(data.friends)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
     } finally {
       setLoading(false)
     }
@@ -37,7 +39,8 @@ export default function FriendsList({ refreshTrigger, onUpdate }) {
         setFriends(prev => prev.filter(f => f.id !== confirming.id))
         if (onUpdate) onUpdate()
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
     } finally {
       setRemoving(false)
       setConfirming(null)
@@ -82,9 +85,9 @@ export default function FriendsList({ refreshTrigger, onUpdate }) {
                   </button>
                   <button
                     onClick={() => setConfirming(f)}
-                    className="text-zinc-600 hover:text-red-400 transition text-lg leading-none"
+                    className="text-zinc-600 hover:text-red-400 transition"
                   >
-                    ×
+                    <X size={18} />
                   </button>
                 </li>
               ))}

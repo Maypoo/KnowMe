@@ -15,7 +15,8 @@ export default function FriendRequests({ refreshTrigger, onRespond }) {
       if (res.ok) {
         setRequests(data.requests)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
     } finally {
       setLoading(false)
     }
@@ -26,14 +27,18 @@ export default function FriendRequests({ refreshTrigger, onRespond }) {
   }, [fetchRequests, refreshTrigger])
 
   const handleRespond = async (requestId, action) => {
+    const prev = requests.find(r => r.id === requestId)
+    setRequests(prev => prev.filter(r => r.id !== requestId))
+
     const res = await api('/api/friends/respond', {
       method: 'POST',
       body: JSON.stringify({ requestId, action }),
     })
 
     if (res.ok) {
-      setRequests(prev => prev.filter(r => r.id !== requestId))
       onRespond?.()
+    } else {
+      if (prev) setRequests(p => [...p, prev])
     }
   }
 

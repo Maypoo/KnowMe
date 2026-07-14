@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ArrowLeft, Search, X, Plus, User, Home as HomeIcon, Users, Send, Bell } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from '../components/Avatar'
@@ -11,12 +12,12 @@ import ChatsList from '../components/ChatsList'
 import ChatConversation from '../components/ChatConversation'
 import NewChat from '../components/NewChat'
 import VoiceCall from '../components/VoiceCall'
+import NotificationsPanel from '../components/NotificationsPanel'
 
 const TABS = [
   { key: 'friends', label: 'Amigos' },
   { key: 'add', label: 'Agregar' },
   { key: 'requests', label: 'Solicitudes' },
-  { key: 'pending', label: 'Enviadas' },
 ]
 
 const HOME_STATE_KEY = 'knowme_home_state'
@@ -26,11 +27,12 @@ function loadSavedState() {
     const raw = localStorage.getItem(HOME_STATE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw)
-    if (parsed.view && !['friends', 'chats', 'search'].includes(parsed.view)) return null
-    if (parsed.tab && !['friends', 'add', 'requests', 'pending'].includes(parsed.tab)) return null
+    if (parsed.view && !['friends', 'chats', 'search', 'home', 'notifications', 'plus'].includes(parsed.view)) return null
+    if (parsed.tab && !['friends', 'add', 'requests'].includes(parsed.tab)) return null
     if (parsed.chatsView && !['list', 'new'].includes(parsed.chatsView)) return null
     return parsed
-  } catch {
+  } catch (err) {
+    console.error(err)
     return null
   }
 }
@@ -42,7 +44,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState(saved.current?.tab ?? 'friends')
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const [requestsRefresh, setRequestsRefresh] = useState(0)
+  const [pendingRefresh, setPendingRefresh] = useState(0)
+  const [friendsRefresh, setFriendsRefresh] = useState(0)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [view, setView] = useState(saved.current?.view ?? 'friends')
   const [chatsView, setChatsView] = useState(saved.current?.chatsView ?? 'list')
@@ -50,6 +54,7 @@ export default function Home() {
   const [chatsRefreshTrigger, setChatsRefreshTrigger] = useState(0)
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0)
+  const [notificationsCount, setNotificationsCount] = useState(0)
   const dropdownRef = useRef(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -58,7 +63,7 @@ export default function Home() {
   const [recentSearches, setRecentSearches] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('knowme_recent_searches') || '[]')
-    } catch { return [] }
+    } catch (err) { console.error(err); return [] }
   })
   const voiceCallRef = useRef(null)
 
@@ -97,15 +102,16 @@ export default function Home() {
     }
 
     const handleRequestReceived = () => {
-      setRefreshTrigger(t => t + 1)
+      setRequestsRefresh(t => t + 1)
     }
 
     const handleRequestUpdated = () => {
-      setRefreshTrigger(t => t + 1)
+      setPendingRefresh(t => t + 1)
+      setFriendsRefresh(t => t + 1)
     }
 
     const handleRequestCancelled = () => {
-      setRefreshTrigger(t => t + 1)
+      setRequestsRefresh(t => t + 1)
     }
 
     const handleNewMessage = () => {
@@ -116,11 +122,21 @@ export default function Home() {
       setChatsRefreshTrigger(t => t + 1)
     }
 
+    const handleNotification = () => {
+      fetchNotificationCount()
+    }
+
+    const handleNotificationsCleared = () => {
+      fetchNotificationCount()
+    }
+
     socket.on('friend_request_received', handleRequestReceived)
     socket.on('friend_request_updated', handleRequestUpdated)
     socket.on('friend_request_cancelled', handleRequestCancelled)
     socket.on('new_message', handleNewMessage)
     socket.on('chat_created', handleChatCreated)
+    socket.on('notification', handleNotification)
+    socket.on('notifications_cleared', handleNotificationsCleared)
 
     return () => {
       socket.off('friend_request_received', handleRequestReceived)
@@ -128,6 +144,8 @@ export default function Home() {
       socket.off('friend_request_cancelled', handleRequestCancelled)
       socket.off('new_message', handleNewMessage)
       socket.off('chat_created', handleChatCreated)
+      socket.off('notification', handleNotification)
+      socket.off('notifications_cleared', handleNotificationsCleared)
     }
   }, [profile])
 
@@ -140,8 +158,20 @@ export default function Home() {
           setUnreadMessagesCount(data.total)
         }
       })
-      .catch(() => {})
+      .catch((err) => { console.error(err) })
   }, [profile, chatsRefreshTrigger])
+
+  const fetchNotificationCount = useCallback(async () => {
+    try {
+      const res = await api('/api/notifications/unread/count')
+      const data = await res.json()
+      if (data.count !== undefined) {
+        setNotificationsCount(data.count)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }, [])
 
   useEffect(() => {
     if (!profile) return
@@ -152,8 +182,13 @@ export default function Home() {
           setPendingRequestsCount(data.count)
         }
       })
-      .catch(() => {})
-  }, [profile, refreshTrigger])
+      .catch((err) => { console.error(err) })
+  }, [profile, requestsRefresh])
+
+  useEffect(() => {
+    if (!profile) return
+    fetchNotificationCount()
+  }, [profile, fetchNotificationCount])
 
   useEffect(() => {
     if (!profile) return
@@ -170,7 +205,7 @@ export default function Home() {
           setView('chats')
           setActiveChat(storedChat)
         }
-      } catch {}
+      } catch (err) { console.error(err) }
       sessionStorage.removeItem('chatReturn')
     }
   }, [profile])
@@ -221,7 +256,8 @@ export default function Home() {
       const res = await api(`/api/users/search?q=${encodeURIComponent(q)}`)
       const data = await res.json()
       setSearchResults(data.users || [])
-    } catch {
+    } catch (err) {
+      console.error(err)
       setSearchResults([])
     }
     setSearching(false)
@@ -239,7 +275,7 @@ export default function Home() {
         setActiveChat(data.chat)
         setChatsView('list')
       }
-    } catch {}
+    } catch (err) { console.error(err) }
   }
 
   if (loading) {
@@ -263,10 +299,7 @@ export default function Home() {
               onClick={() => setView('friends')}
               className="rounded-full p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12" />
-                <polyline points="12 19 5 12 12 5" />
-              </svg>
+              <ArrowLeft size={20} />
             </button>
             <h2 className="text-zinc-100 text-lg font-semibold">Buscar usuarios</h2>
           </div>
@@ -344,25 +377,16 @@ export default function Home() {
                         }}
                       >
                         {entry.type === 'user' ? (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600 shrink-0">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                            <circle cx="12" cy="7" r="4" />
-                          </svg>
+                          <User size={16} className="text-zinc-600 shrink-0" />
                         ) : (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600 shrink-0">
-                            <circle cx="11" cy="11" r="8" />
-                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                          </svg>
+                          <Search size={16} className="text-zinc-600 shrink-0" />
                         )}
                         <span className="flex-1 text-sm text-zinc-400 group-hover:text-zinc-300 transition truncate">{entry.value}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); const prev = JSON.parse(localStorage.getItem('knowme_recent_searches') || '[]'); const next = prev.filter(s => s.value !== entry.value || s.type !== entry.type); localStorage.setItem('knowme_recent_searches', JSON.stringify(next)); setRecentSearches(next) }}
                           className="p-1 rounded text-zinc-600 hover:text-zinc-300 hover:bg-zinc-700 transition"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
+                          <X size={14} />
                         </button>
                       </div>
                     ))}
@@ -381,10 +405,7 @@ export default function Home() {
                 onClick={() => { setView('search'); setSearchQuery(''); setSearchResults([]); setSearched(false) }}
                 className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8" />
-                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
+                <Search size={20} />
               </button>
               <div className="relative" ref={dropdownRef}>
                 <button onClick={() => setDropdownOpen(!dropdownOpen)} className="flex items-center gap-3 outline-none">
@@ -444,7 +465,13 @@ export default function Home() {
           )}
 
           <div className="pb-20 flex-1 flex flex-col min-h-0">
-            {view === 'chats' ? (
+            {view === 'home' || view === 'plus' ? (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-zinc-500 text-lg">En desarrollo...</p>
+              </div>
+            ) : view === 'notifications' ? (
+              <NotificationsPanel onNotificationCount={setNotificationsCount} />
+            ) : view === 'chats' ? (
               <>
                 {chatsView === 'new' ? (
                   <NewChat onSelectFriend={handleSelectFriend} onBack={handleBackFromNewChat} />
@@ -459,10 +486,7 @@ export default function Home() {
                         className="rounded-full p-2 transition hover:opacity-80"
                         style={{ backgroundColor: '#6659ff' }}
                       >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="12" y1="5" x2="12" y2="19" />
-                          <line x1="5" y1="12" x2="19" y2="12" />
-                        </svg>
+                        <Plus size={20} strokeWidth={2.5} />
                       </button>
                     </div>
                     <ChatsList
@@ -476,25 +500,22 @@ export default function Home() {
               <>
                 {tab === 'add' && (
                   <section className="flex-1 flex flex-col">
-                    <FriendSearch />
+                    <FriendSearch onRequestSent={() => setPendingRefresh(t => t + 1)} />
+                    <div className="mt-8">
+                      <PendingRequests refreshTrigger={pendingRefresh} />
+                    </div>
                   </section>
                 )}
 
                 {tab === 'requests' && (
                   <section className="flex-1 flex flex-col">
-                    <FriendRequests refreshTrigger={refreshTrigger} onRespond={() => setRefreshTrigger(t => t + 1)} />
-                  </section>
-                )}
-
-                {tab === 'pending' && (
-                  <section className="flex-1 flex flex-col">
-                    <PendingRequests refreshTrigger={refreshTrigger} />
+                    <FriendRequests refreshTrigger={requestsRefresh} onRespond={() => { setRequestsRefresh(t => t + 1); setFriendsRefresh(t => t + 1) }} />
                   </section>
                 )}
 
                 {tab === 'friends' && (
                   <section className="flex-1 flex flex-col">
-                    <FriendsList refreshTrigger={refreshTrigger} onUpdate={() => setRefreshTrigger(t => t + 1)} />
+                    <FriendsList refreshTrigger={friendsRefresh} onUpdate={() => setFriendsRefresh(t => t + 1)} />
                   </section>
                 )}
               </>
@@ -507,15 +528,17 @@ export default function Home() {
         <div className="fixed bottom-0 left-0 right-0 flex justify-center pb-4">
           <div className="bg-zinc-900 rounded-2xl px-8 py-3 flex items-center gap-12 shadow-lg">
             <button
+              onClick={() => setView('home')}
+              className={`relative transition ${view === 'home' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
+            >
+              <HomeIcon size={24} />
+            </button>
+
+            <button
               onClick={() => { setView('friends'); setTab('friends') }}
               className={`relative transition ${view === 'friends' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
+              <Users size={24} />
               {pendingRequestsCount > 0 && (
                 <span
                   className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
@@ -533,6 +556,35 @@ export default function Home() {
             </button>
 
             <button
+              onClick={() => setView('plus')}
+              className="rounded-full p-2 transition hover:opacity-80"
+              style={{ backgroundColor: '#6659ff' }}
+            >
+              <Plus size={24} strokeWidth={2.5} />
+            </button>
+
+            <button
+              onClick={() => setView('notifications')}
+              className={`relative transition ${view === 'notifications' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
+            >
+              <Bell size={24} />
+              {notificationsCount > 0 && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
+                  style={{
+                    backgroundColor: '#6659ff',
+                    color: '#fff',
+                    minWidth: 18,
+                    height: 18,
+                    padding: '0 5px',
+                  }}
+                >
+                  {notificationsCount > 99 ? '99+' : notificationsCount}
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => {
                 setView('chats')
                 setActiveChat(null)
@@ -540,9 +592,7 @@ export default function Home() {
               }}
               className={`relative transition ${view === 'chats' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
+              <Send size={24} />
               {unreadMessagesCount > 0 && (
                 <span
                   className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { ChevronDown, Check } from 'lucide-react'
 import countries from '../data/countries'
 
 function getFlagUrl(code) {
@@ -61,9 +62,7 @@ export default function CountrySelect({ value, onChange }) {
         ) : (
           <span className="text-zinc-500">Seleccionar país</span>
         )}
-        <svg className={`w-4 h-4 ml-auto text-zinc-500 transition ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
+        <ChevronDown size={16} className={`ml-auto text-zinc-500 transition ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
@@ -92,9 +91,7 @@ export default function CountrySelect({ value, onChange }) {
                   <img src={getFlagUrl(c.code)} alt="" className="w-5 h-auto rounded-sm" />
                   <span>{c.name}</span>
                   {value === c.code && (
-                    <svg className="w-4 h-4 ml-auto text-[#6659ff]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Check size={16} className="ml-auto text-[#6659ff]" />
                   )}
                 </button>
               ))

@@ -73,7 +73,8 @@ export default function SetupUsername() {
       }
 
       navigate('/')
-    } catch {
+    } catch (err) {
+      console.error(err)
       setError('Error de conexión con el servidor')
       setLoading(false)
     }

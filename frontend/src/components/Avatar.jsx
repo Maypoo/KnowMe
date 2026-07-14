@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { User } from 'lucide-react'
 
 export default function Avatar({ src, alt = '', size = 36, className = '' }) {
   const [error, setError] = useState(false)
@@ -9,10 +10,7 @@ export default function Avatar({ src, alt = '', size = 36, className = '' }) {
         className={`bg-zinc-800 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden ${className}`}
         style={{ width: size, height: size }}
       >
-        <svg viewBox="0 0 40 40" fill="none" width={size * 0.6} height={size * 0.6}>
-          <circle cx="20" cy="14" r="7" fill="#52525b" />
-          <path d="M5 36c0-8.284 6.716-15 15-15s15 6.716 15 15" fill="#52525b" />
-        </svg>
+        <User size={size * 0.5} className="text-zinc-400" />
       </div>
     )
   }

@@ -28,7 +28,8 @@ function isLocalOrigin(origin) {
     return hostname === 'localhost' || hostname === '127.0.0.1' ||
       hostname.startsWith('192.168.') || hostname.startsWith('10.') ||
       hostname.startsWith('172.')
-  } catch {
+  } catch (err) {
+    console.error(err)
     return false
   }
 }
@@ -98,7 +99,7 @@ async function auditLog(event, userId, email, metadata = {}) {
   try {
     console.log(JSON.stringify({ type: 'audit', ...entry }))
     await supabase.from('audit_logs').insert(entry)
-  } catch {}
+  } catch (err) { console.error(err) }
 }
 
 const COOKIE_OPTIONS = {
@@ -221,7 +222,8 @@ async function uploadAvatar(userId, base64) {
       .resize(200, 200, { fit: 'cover' })
       .webp()
       .toBuffer()
-  } catch {
+  } catch (err) {
+    console.error(err)
     return null
   }
 
@@ -670,6 +672,14 @@ app.post('/api/friends/respond', auth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Esta solicitud ya fue respondida' })
   }
 
+  const io = getIO()
+
+  const { data: responderProfile } = await supabase
+    .from('profiles')
+    .select('username, display_name, avatar_url')
+    .eq('id', req.user.id)
+    .maybeSingle()
+
   if (action === 'rejected') {
     const { error: deleteError } = await supabase
       .from('friend_requests')
@@ -680,13 +690,34 @@ app.post('/api/friends/respond', auth, asyncHandler(async (req, res) => {
       return res.status(400).json({ error: 'Error al rechazar la solicitud' })
     }
 
-    const io = getIO()
+    const { data: notif } = await supabase
+      .from('notifications')
+      .insert({ user_id: request.sender_id, from_user_id: req.user.id, type: 'friend_reject' })
+      .select()
+      .single()
+
     if (io) {
       io.to(request.sender_id).emit('friend_request_updated', {
         id: requestId,
         status: 'rejected',
         responderId: req.user.id,
       })
+
+      if (notif) {
+        io.to(request.sender_id).emit('notification', {
+          notification: {
+            id: notif.id,
+            type: 'friend_reject',
+            read: false,
+            createdAt: notif.created_at,
+            fromUser: {
+              id: req.user.id,
+              username: sanitize(responderProfile?.display_name || responderProfile?.username || 'Desconocido'),
+              avatar_url: responderProfile?.avatar_url || null,
+            },
+          },
+        })
+      }
     }
 
     return res.json({ message: 'Solicitud rechazada' })
@@ -701,13 +732,34 @@ app.post('/api/friends/respond', auth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Error al aceptar la solicitud' })
   }
 
-  const io = getIO()
+  const { data: notif } = await supabase
+    .from('notifications')
+    .insert({ user_id: request.sender_id, from_user_id: req.user.id, type: 'friend_accept' })
+    .select()
+    .single()
+
   if (io) {
     io.to(request.sender_id).emit('friend_request_updated', {
       id: requestId,
       status: 'accepted',
       responderId: req.user.id,
     })
+
+    if (notif) {
+      io.to(request.sender_id).emit('notification', {
+        notification: {
+          id: notif.id,
+          type: 'friend_accept',
+          read: false,
+          createdAt: notif.created_at,
+          fromUser: {
+            id: req.user.id,
+            username: sanitize(responderProfile?.display_name || responderProfile?.username || 'Desconocido'),
+            avatar_url: responderProfile?.avatar_url || null,
+          },
+        },
+      })
+    }
   }
 
   res.json({ message: 'Solicitud aceptada' })
@@ -803,6 +855,37 @@ app.delete('/api/friends/:friendId', auth, asyncHandler(async (req, res) => {
 
   if (deleteError) {
     return res.status(400).json({ error: 'Error al eliminar amigo' })
+  }
+
+  const { data: unfriendNotif } = await supabase
+    .from('notifications')
+    .insert({ user_id: friendId, from_user_id: req.user.id, type: 'unfriend' })
+    .select()
+    .single()
+
+  const io = getIO()
+  if (io && unfriendNotif) {
+    const [{ data: myProfile }, { data: isFollowingBackRow }] = await Promise.all([
+      supabase.from('profiles').select('id, username, display_name, avatar_url').eq('id', req.user.id).maybeSingle(),
+      supabase.from('followers').select('id').eq('follower_id', friendId).eq('following_id', req.user.id).maybeSingle(),
+    ])
+
+    if (myProfile) {
+      io.to(friendId).emit('notification', {
+        notification: {
+          id: unfriendNotif.id,
+          type: 'unfriend',
+          read: false,
+          createdAt: unfriendNotif.created_at,
+          isFollowingBack: !!isFollowingBackRow,
+          fromUser: {
+            id: req.user.id,
+            username: sanitize(myProfile?.display_name || myProfile?.username || 'Desconocido'),
+            avatar_url: myProfile?.avatar_url || null,
+          },
+        },
+      })
+    }
   }
 
   res.json({ message: 'Amigo eliminado' })
@@ -1071,6 +1154,99 @@ app.post('/api/avatar', auth, asyncHandler(async (req, res) => {
   })
 }))
 
+app.get('/api/notifications', auth, asyncHandler(async (req, res) => {
+  const { data: notifications } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (!notifications || notifications.length === 0) {
+    return res.json({ notifications: [] })
+  }
+
+  const fromIds = [...new Set(notifications.map(n => n.from_user_id))]
+
+  const [{ data: fromProfiles }, { data: followingRows }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_url')
+      .in('id', fromIds),
+    supabase
+      .from('followers')
+      .select('following_id')
+      .eq('follower_id', req.user.id)
+      .in('following_id', fromIds),
+  ])
+
+  const followingSet = new Set((followingRows || []).map(r => r.following_id))
+
+  const profileMap = {}
+  if (fromProfiles) {
+    for (const p of fromProfiles) {
+      profileMap[p.id] = { username: sanitize(p.display_name || p.username), avatar_url: p.avatar_url }
+    }
+  }
+
+  const enriched = notifications.map(n => ({
+    id: n.id,
+    type: n.type,
+    read: n.read,
+    createdAt: n.created_at,
+    fromUser: {
+      id: n.from_user_id,
+      username: profileMap[n.from_user_id]?.username || 'Desconocido',
+      avatar_url: profileMap[n.from_user_id]?.avatar_url || null,
+    },
+    isFollowingBack: followingSet.has(n.from_user_id),
+  }))
+
+  res.json({ notifications: enriched })
+}))
+
+app.get('/api/notifications/unread/count', auth, asyncHandler(async (req, res) => {
+  const { count } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', req.user.id)
+    .eq('read', false)
+
+  res.json({ count: count || 0 })
+}))
+
+app.post('/api/notifications/read', auth, asyncHandler(async (req, res) => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('user_id', req.user.id)
+    .eq('read', false)
+
+  if (error) {
+    return res.status(400).json({ error: 'Error al marcar notificaciones como leídas' })
+  }
+
+  res.json({ message: 'Notificaciones marcadas como leídas' })
+}))
+
+app.delete('/api/notifications', auth, asyncHandler(async (req, res) => {
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('user_id', req.user.id)
+
+  if (error) {
+    return res.status(400).json({ error: 'Error al eliminar notificaciones' })
+  }
+
+  const io = getIO()
+  if (io) {
+    io.to(req.user.id).emit('notifications_cleared')
+  }
+
+  res.json({ message: 'Notificaciones eliminadas' })
+}))
+
 app.post('/api/follow/:username', auth, asyncHandler(async (req, res) => {
   const { username } = req.params
   const sanitized = sanitize(username)
@@ -1100,6 +1276,79 @@ app.post('/api/follow/:username', auth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Error al seguir al usuario' })
   }
 
+  const { data: existingUnfollow } = await supabase
+    .from('notifications')
+    .select('id')
+    .eq('user_id', target.id)
+    .eq('from_user_id', req.user.id)
+    .eq('type', 'unfollow')
+    .maybeSingle()
+
+  let notif
+
+  if (existingUnfollow) {
+    const { data: updated } = await supabase
+      .from('notifications')
+      .update({ type: 'follow', created_at: new Date().toISOString(), read: false })
+      .eq('id', existingUnfollow.id)
+      .select()
+      .single()
+
+    notif = updated
+  } else {
+    const { data: existingFollow } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('user_id', target.id)
+      .eq('from_user_id', req.user.id)
+      .eq('type', 'follow')
+      .maybeSingle()
+
+    if (!existingFollow) {
+      const { data: inserted } = await supabase
+        .from('notifications')
+        .insert({ user_id: target.id, from_user_id: req.user.id, type: 'follow' })
+        .select()
+        .single()
+
+      notif = inserted
+    }
+  }
+
+  if (notif) {
+    const [{ data: fromProfile }, { data: isFollowingBackRow }] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('username, display_name, avatar_url')
+        .eq('id', req.user.id)
+        .maybeSingle(),
+      supabase
+        .from('followers')
+        .select('id')
+        .eq('follower_id', target.id)
+        .eq('following_id', req.user.id)
+        .maybeSingle(),
+    ])
+
+    const io = getIO()
+    if (io) {
+      io.to(target.id).emit('notification', {
+        notification: {
+          id: notif.id,
+          type: 'follow',
+          read: false,
+          createdAt: notif.created_at,
+          isFollowingBack: !!isFollowingBackRow,
+          fromUser: {
+            id: req.user.id,
+            username: sanitize(fromProfile?.display_name || fromProfile?.username || 'Desconocido'),
+            avatar_url: fromProfile?.avatar_url || null,
+          },
+        },
+      })
+    }
+  }
+
   res.json({ message: 'Usuario seguido' })
 }))
 
@@ -1125,6 +1374,79 @@ app.delete('/api/follow/:username', auth, asyncHandler(async (req, res) => {
 
   if (deleteError) {
     return res.status(400).json({ error: 'Error al dejar de seguir' })
+  }
+
+  const { data: existingFollow } = await supabase
+    .from('notifications')
+    .select('id')
+    .eq('user_id', target.id)
+    .eq('from_user_id', req.user.id)
+    .eq('type', 'follow')
+    .maybeSingle()
+
+  let notif
+
+  if (existingFollow) {
+    const { data: updated } = await supabase
+      .from('notifications')
+      .update({ type: 'unfollow', created_at: new Date().toISOString(), read: false })
+      .eq('id', existingFollow.id)
+      .select()
+      .single()
+
+    notif = updated
+  } else {
+    const { data: existingUnfollow } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('user_id', target.id)
+      .eq('from_user_id', req.user.id)
+      .eq('type', 'unfollow')
+      .maybeSingle()
+
+    if (existingUnfollow) {
+      const { data: updated } = await supabase
+        .from('notifications')
+        .update({ created_at: new Date().toISOString(), read: false })
+        .eq('id', existingUnfollow.id)
+        .select()
+        .single()
+
+      notif = updated
+    } else {
+      const { data: inserted } = await supabase
+        .from('notifications')
+        .insert({ user_id: target.id, from_user_id: req.user.id, type: 'unfollow' })
+        .select()
+        .single()
+
+      notif = inserted
+    }
+  }
+
+  if (notif) {
+    const [{ data: fromProfile }, { data: isFollowingBackRow }] = await Promise.all([
+      supabase.from('profiles').select('id, username, display_name, avatar_url').eq('id', req.user.id).maybeSingle(),
+      supabase.from('followers').select('id').eq('follower_id', target.id).eq('following_id', req.user.id).maybeSingle(),
+    ])
+
+    const io = getIO()
+    if (io && fromProfile) {
+      io.to(target.id).emit('notification', {
+        notification: {
+          id: notif.id,
+          type: 'unfollow',
+          read: false,
+          createdAt: notif.created_at,
+          isFollowingBack: !!isFollowingBackRow,
+          fromUser: {
+            id: req.user.id,
+            username: sanitize(fromProfile?.display_name || fromProfile?.username || 'Desconocido'),
+            avatar_url: fromProfile?.avatar_url || null,
+          },
+        },
+      })
+    }
   }
 
   res.json({ message: 'Dejaste de seguir al usuario' })
@@ -1350,17 +1672,6 @@ app.post('/api/chats', auth, asyncHandler(async (req, res) => {
 
   if (otherUserId === req.user.id) {
     return res.status(400).json({ error: 'No podés chatear con vos mismo' })
-  }
-
-  const { data: friendship } = await supabase
-    .from('friend_requests')
-    .select('id')
-    .eq('status', 'accepted')
-    .or(`and(sender_id.eq.${req.user.id},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${req.user.id})`)
-    .maybeSingle()
-
-  if (!friendship) {
-    return res.status(403).json({ error: 'No son amigos' })
   }
 
   const { data: cp1 } = await supabase

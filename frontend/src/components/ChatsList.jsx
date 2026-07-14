@@ -14,7 +14,8 @@ export default function ChatsList({ onSelectChat, refreshTrigger }) {
       if (res.ok) {
         setChats(data.chats)
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
     } finally {
       setLoading(false)
     }

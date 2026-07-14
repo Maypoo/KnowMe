@@ -71,7 +71,8 @@ export default function AuthCallback() {
             navigate('/')
           }
           return
-        } catch {
+        } catch (err) {
+          console.error(err)
           if (!cancelled) {
             setError('Error de conexión. Intenta de nuevo.')
           }
@@ -116,7 +117,8 @@ export default function AuthCallback() {
         } else {
           navigate('/')
         }
-      } catch {
+      } catch (err) {
+        console.error(err)
         if (!cancelled) {
           setError('Error de conexión. Intenta de nuevo.')
         }

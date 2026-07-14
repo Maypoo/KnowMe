@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../lib/api'
 
-export default function FriendSearch() {
+export default function FriendSearch({ onRequestSent }) {
   const [username, setUsername] = useState('')
   const [status, setStatus] = useState(null)
 
@@ -34,7 +34,9 @@ export default function FriendSearch() {
 
       setStatus({ type: 'success', message: 'Solicitud enviada' })
       setUsername('')
-    } catch {
+      onRequestSent?.()
+    } catch (err) {
+      console.error(err)
       setStatus({ type: 'error', message: 'Error de conexión' })
     }
   }
@@ -62,7 +64,7 @@ export default function FriendSearch() {
         </button>
       </form>
       {status && (
-        <p className={`text-sm mt-2 ${status.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+        <p className={`text-sm mt-2 text-center ${status.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
           {status.message}
         </p>
       )}

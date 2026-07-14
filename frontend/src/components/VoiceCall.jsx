@@ -1,4 +1,5 @@
 import { forwardRef, useImperativeHandle, useEffect, useState, useRef, useCallback } from 'react'
+import { Phone, PhoneOff, X } from 'lucide-react'
 import { socket } from '../lib/socket'
 import { api } from '../lib/api'
 import { createPeerConnection } from '../lib/webrtc'
@@ -211,7 +212,7 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
         try {
           await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.sdp))
           for (const c of pendingCandidatesRef.current) {
-            try { await pcRef.current.addIceCandidate(new RTCIceCandidate(c)) } catch {}
+            try { await pcRef.current.addIceCandidate(new RTCIceCandidate(c)) } catch (err) { console.error(err) }
           }
           pendingCandidatesRef.current = []
           if (pcRef.current.iceConnectionState === 'connected' || pcRef.current.iceConnectionState === 'completed') {
@@ -219,7 +220,8 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
             setCallState('connected')
             if (!callStartTimeRef.current) startTimer()
           }
-        } catch {
+        } catch (err) {
+          console.error(err)
           endCall()
         }
       }
@@ -230,7 +232,7 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
         if (pcRef.current.currentRemoteDescription) {
           try {
             await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate))
-          } catch {}
+          } catch (err) { console.error(err) }
         } else {
           pendingCandidatesRef.current.push(data.candidate)
         }
@@ -356,7 +358,7 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
       await pc.setLocalDescription(answer)
 
       for (const c of pendingCandidatesRef.current) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(c)) } catch {}
+        try { await pc.addIceCandidate(new RTCIceCandidate(c)) } catch (err) { console.error(err) }
       }
       pendingCandidatesRef.current = []
 
@@ -422,9 +424,7 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
                 onClick={endCall}
                 className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                </svg>
+                <PhoneOff size={24} />
               </button>
             </>
           )}
@@ -437,18 +437,13 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
                   onClick={handleAcceptCall}
                   className="rounded-full p-4 bg-green-600 text-white hover:bg-green-700 transition"
                 >
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                  </svg>
+                  <Phone size={24} />
                 </button>
                 <button
                   onClick={handleRejectCall}
                   className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
                 >
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
+                  <X size={24} />
                 </button>
               </div>
             </>
@@ -465,9 +460,7 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
                 onClick={endCall}
                 className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                </svg>
+                <PhoneOff size={24} />
               </button>
             </>
           )}

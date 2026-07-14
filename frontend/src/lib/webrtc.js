@@ -6,7 +6,8 @@ export function createPeerConnection(config = {}) {
       ],
       ...config,
     })
-  } catch {
+  } catch (err) {
+    console.error(err)
     return null
   }
 }

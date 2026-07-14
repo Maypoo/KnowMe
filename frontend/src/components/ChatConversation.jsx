@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ChevronLeft, Phone, Send } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
@@ -29,7 +30,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
       })
       .finally(() => setLoading(false))
 
-    api(`/api/chats/${chat.id}/read`, { method: 'POST' }).then(() => onChatRead?.()).catch(() => {})
+    api(`/api/chats/${chat.id}/read`, { method: 'POST' }).then(() => onChatRead?.()).catch((err) => { console.error(err) })
   }, [chat?.id])
 
   useEffect(() => {
@@ -73,7 +74,8 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
       } else {
         setError(data.error || 'Error al enviar el mensaje')
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
       setError('Error al enviar el mensaje')
     } finally {
       setSending(false)
@@ -111,7 +113,8 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
           setError(data.error || 'Error al enviar la solicitud')
         }
       }
-    } catch {
+    } catch (err) {
+      console.error(err)
       setError('Error al enviar la solicitud')
     }
   }
@@ -120,9 +123,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center gap-3 mb-4">
         <button onClick={onBack} className="text-zinc-400 hover:text-zinc-100 transition">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
+          <ChevronLeft size={24} />
         </button>
         <button onClick={handleOpenProfile} className="flex items-center gap-3 hover:opacity-80 transition flex-1 min-w-0">
           <Avatar src={chat.otherUser?.avatar_url} size={36} />
@@ -134,9 +135,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
             className="text-zinc-400 hover:text-zinc-100 transition p-2 rounded-full hover:bg-zinc-800"
             title="Llamar"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-            </svg>
+            <Phone size={20} />
           </button>
         )}
       </div>
@@ -167,9 +166,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
                 {msg.content.startsWith('Llamada perdida de ') ? (
                   <div className="flex justify-center">
                     <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-800/50">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500">
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                      </svg>
+                      <Phone size={14} className="text-zinc-500" />
                       <p className="text-zinc-500 text-xs">{msg.content}</p>
                       <p className="text-zinc-600 text-[10px]">
                         {date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
@@ -243,10 +240,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
             className="rounded-full p-2.5 transition disabled:opacity-40"
             style={{ backgroundColor: '#6659ff' }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
+            <Send size={18} />
           </button>
         </div>
       )}
