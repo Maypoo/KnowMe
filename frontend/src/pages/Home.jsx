@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Search, X, Plus, User, Home as HomeIcon, Users, Send, Bell } from 'lucide-react'
+import NumberFlow from '@number-flow/react'
+import { ArrowLeft, Search, X, Plus, User, Home as HomeIcon, Users, Send, Bell, Edit, Heart, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from '../components/Avatar'
@@ -53,6 +54,13 @@ export default function Home() {
   const [activeChat, setActiveChat] = useState(saved.current?.activeChat ?? null)
   const [chatsRefreshTrigger, setChatsRefreshTrigger] = useState(0)
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
+  const [postContent, setPostContent] = useState('')
+  const [myPost, setMyPost] = useState(null)
+  const [publishing, setPublishing] = useState(false)
+  const [postLikes, setPostLikes] = useState(0)
+  const [editing, setEditing] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0)
   const [notificationsCount, setNotificationsCount] = useState(0)
   const dropdownRef = useRef(null)
@@ -66,6 +74,10 @@ export default function Home() {
     } catch (err) { console.error(err); return [] }
   })
   const voiceCallRef = useRef(null)
+  const [feedPosts, setFeedPosts] = useState([])
+  const [feedLoading, setFeedLoading] = useState(false)
+  const [sendingRequest, setSendingRequest] = useState(null)
+  const [likingPostId, setLikingPostId] = useState(null)
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -235,6 +247,143 @@ export default function Home() {
 
   const handleBackFromNewChat = () => {
     setChatsView('list')
+  }
+
+  const fetchMyPost = useCallback(async () => {
+    try {
+      const res = await api('/api/posts/mine')
+      const data = await res.json()
+      if (data.post) {
+        setMyPost(data.post)
+        setPostContent(data.post.content)
+        setPostLikes(data.post.post_likes?.[0]?.count ?? 0)
+      } else {
+        setMyPost(null)
+        setPostContent('')
+        setPostLikes(0)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!profile) return
+    fetchMyPost()
+  }, [profile, fetchMyPost])
+
+  const fetchFeed = useCallback(async () => {
+    setFeedLoading(true)
+    try {
+      const res = await api('/api/posts/feed')
+      const data = await res.json()
+      setFeedPosts(data.posts || [])
+    } catch (err) {
+      console.error(err)
+      setFeedPosts([])
+    }
+    setFeedLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (!profile || view !== 'home') return
+    fetchFeed()
+  }, [profile, view, fetchFeed])
+
+  const handleFeedLike = async (postId, liked) => {
+    if (likingPostId) return
+    setLikingPostId(postId)
+    setFeedPosts(prev => prev.map(p =>
+      p.id === postId
+        ? { ...p, likes_count: liked ? p.likes_count - 1 : p.likes_count + 1, liked_by_me: !liked }
+        : p
+    ))
+    const endpoint = liked ? `/api/posts/${postId}/unlike` : `/api/posts/${postId}/like`
+    try {
+      const res = await api(endpoint, { method: 'POST' })
+      if (!res.ok) {
+        setFeedPosts(prev => prev.map(p =>
+          p.id === postId
+            ? { ...p, likes_count: liked ? p.likes_count + 1 : p.likes_count - 1, liked_by_me: liked }
+            : p
+        ))
+      }
+    } catch (err) {
+      setFeedPosts(prev => prev.map(p =>
+        p.id === postId
+          ? { ...p, likes_count: liked ? p.likes_count + 1 : p.likes_count - 1, liked_by_me: liked }
+          : p
+      ))
+    }
+    setLikingPostId(null)
+  }
+
+  const handleSendFriendRequest = async (post) => {
+    setSendingRequest(post.id)
+    try {
+      const res = await api('/api/friends/request', {
+        method: 'POST',
+        body: JSON.stringify({ username: post.username }),
+      })
+      if (res.ok) {
+        setFeedPosts(prev => prev.map(p =>
+          p.id === post.id ? { ...p, friend_request_status: 'pending' } : p
+        ))
+      }
+    } catch (err) {
+      console.error(err)
+    }
+    setSendingRequest(null)
+  }
+
+  const handlePublish = async () => {
+    if (!postContent.trim() || publishing) return
+    if (editing && postContent.trim() === myPost.content) return
+    setPublishing(true)
+    try {
+      const res = await api('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: postContent.trim() }),
+      })
+      const data = await res.json()
+      if (data.post) {
+        setMyPost(data.post)
+        setPostLikes(0)
+        setEditing(false)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+    setPublishing(false)
+  }
+
+  const handleEdit = () => {
+    setEditing(true)
+  }
+
+  const handleCancel = () => {
+    setEditing(false)
+    if (myPost) setPostContent(myPost.content)
+  }
+
+  const handleDelete = async () => {
+    if (!confirmingDelete) return
+    setDeleting(true)
+    try {
+      const res = await api('/api/posts', { method: 'DELETE' })
+      const data = await res.json()
+      if (data.deleted) {
+        setMyPost(null)
+        setPostContent('')
+        setPostLikes(0)
+        setEditing(false)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+    setDeleting(false)
+    setConfirmingDelete(false)
   }
 
   const addToRecentSearches = (value, type) => {
@@ -465,9 +614,131 @@ export default function Home() {
           )}
 
           <div className="pb-20 flex-1 flex flex-col min-h-0">
-            {view === 'home' || view === 'plus' ? (
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-zinc-500 text-lg">En desarrollo...</p>
+            {view === 'home' ? (
+              <div className="flex-1 overflow-y-auto snap-y snap-mandatory scroll-smooth no-scrollbar">
+                {feedLoading ? (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-zinc-500">Cargando posteos...</p>
+                  </div>
+                ) : feedPosts.length === 0 ? (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-zinc-500">No hay posteos aún</p>
+                  </div>
+                ) : (
+                  feedPosts.map(post => (
+                    <div key={post.id} className="h-full snap-start flex flex-col items-center justify-center px-6">
+                      <button onClick={() => navigate('/' + post.username)} className="flex items-center gap-3 mb-6 hover:opacity-80 transition">
+                        <Avatar src={post.avatar_url} size={40} />
+                        <span className="text-zinc-100 font-medium text-sm">{post.display_name || post.username}</span>
+                      </button>
+                      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+                        <p className="text-zinc-100 text-lg leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleFeedLike(post.id, post.liked_by_me)}
+                          disabled={likingPostId === post.id}
+                          className="flex items-center gap-2 px-5 py-2.5 rounded-xl transition hover:opacity-90 disabled:opacity-50"
+                          style={{ backgroundColor: '#6659ff' }}
+                        >
+                          <Heart
+                            size={20}
+                            strokeWidth={2.5}
+                            className={post.liked_by_me ? 'text-white fill-white' : 'text-white'}
+                          />
+                          <span className="text-sm font-medium text-white">
+                            {post.likes_count}
+                          </span>
+                        </button>
+                        {post.friend_request_status === 'accepted' ? (
+                          <span
+                            className="rounded-xl px-4 py-2.5 text-sm text-white opacity-60"
+                            style={{ backgroundColor: '#6659ff' }}
+                          >
+                            Amigos
+                          </span>
+                        ) : post.friend_request_status === 'pending' ? (
+                          <span
+                            className="rounded-xl px-4 py-2.5 text-sm text-white opacity-60"
+                            style={{ backgroundColor: '#6659ff' }}
+                          >
+                            Solicitud enviada
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleSendFriendRequest(post)}
+                            disabled={sendingRequest === post.id}
+                            className="rounded-xl px-4 py-2.5 text-sm text-white transition hover:opacity-90 disabled:opacity-50"
+                            style={{ backgroundColor: '#6659ff' }}
+                          >
+                            {sendingRequest === post.id ? 'Enviando...' : 'Enviar solicitud'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : view === 'plus' ? (
+              <div className="flex-1 flex items-center justify-center px-6">
+                <div className="w-full max-w-md flex flex-col items-center gap-4 h-60">
+                  <textarea
+                    value={postContent}
+                    onChange={(e) => setPostContent(e.target.value.slice(0, 300))}
+                    placeholder="Escribí tus intereses actuales."
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-zinc-100 placeholder-zinc-500 resize-none focus:outline-none transition h-32"
+                    style={myPost && !editing ? { borderColor: '#52525b', opacity: 0.5 } : undefined}
+                    readOnly={!!myPost && !editing}
+                    maxLength={300}
+                  />
+                  <div className="w-full flex items-center justify-between">
+                    <span className="text-zinc-500 text-sm">{postContent.length}/300</span>
+                    <div className="flex items-center gap-2">
+                      {myPost && !editing && (
+                        <>
+                          <button
+                            onClick={() => setConfirmingDelete(true)}
+                            className="rounded-lg p-2 transition hover:opacity-80"
+                            style={{ backgroundColor: '#ef4444' }}
+                          >
+                            <Trash2 size={18} strokeWidth={2.5} />
+                          </button>
+                          <button
+                            onClick={handleEdit}
+                            className="rounded-lg p-2 transition hover:opacity-80"
+                            style={{ backgroundColor: '#6659ff' }}
+                          >
+                            <Edit size={18} strokeWidth={2.5} />
+                          </button>
+                        </>
+                      )}
+                      {editing && (
+                        <button
+                          onClick={handleCancel}
+                          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-4 py-2 text-sm transition"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                      <button
+                        onClick={handlePublish}
+                        disabled={!!myPost && !editing || publishing || !postContent.trim() || editing && postContent.trim() === myPost?.content}
+                        className="px-6 py-2 rounded-lg text-white font-medium transition"
+                        style={{
+                          backgroundColor: !postContent.trim() ? '#3f3f46' : '#6659ff',
+                          opacity: !editing && !!myPost || editing && postContent.trim() === myPost?.content ? 0.5 : 1,
+                          cursor: !postContent.trim() ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {publishing ? 'Publicando...' : 'Publicar'}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="w-full flex items-center gap-1.5 text-zinc-400 text-sm">
+                    <Heart size={14} strokeWidth={2} className="text-red-400" fill="#f87171" />
+                    <NumberFlow value={postLikes} suffix={` like${postLikes !== 1 ? 's' : ''}`} />
+                  </div>
+                </div>
               </div>
             ) : view === 'notifications' ? (
               <NotificationsPanel onNotificationCount={setNotificationsCount} />
@@ -526,7 +797,7 @@ export default function Home() {
 
       {view !== 'search' && (
         <div className="fixed bottom-0 left-0 right-0 flex justify-center pb-4">
-          <div className="bg-zinc-900 rounded-2xl px-8 py-3 flex items-center gap-12 shadow-lg">
+          <div className="bg-zinc-900 rounded-2xl px-8 max-[420px]:px-4 py-3 flex items-center gap-12 max-[420px]:gap-6 shadow-lg">
             <button
               onClick={() => setView('home')}
               className={`relative transition ${view === 'home' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
@@ -608,6 +879,32 @@ export default function Home() {
                 </span>
               )}
             </button>
+          </div>
+        </div>
+      )}
+
+      {confirmingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmingDelete(false)} />
+          <div className="relative bg-zinc-900 rounded-xl px-6 py-5 w-full max-w-xs">
+            <p className="text-zinc-100 text-sm mb-4">
+              ¿Eliminar tu post?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmingDelete(false)}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-4 py-2 text-sm transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm transition disabled:opacity-50"
+              >
+                {deleting ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

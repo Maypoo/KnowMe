@@ -2054,6 +2054,225 @@ app.post('/api/calls/missed', auth, asyncHandler(async (req, res) => {
   res.json({ sent: true })
 }))
 
+app.post('/api/posts', auth, asyncHandler(async (req, res) => {
+  const { content } = req.body
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: 'El contenido es requerido' })
+  }
+
+  const sanitized = sanitize(content.trim()).slice(0, 300)
+
+  const { data: existing } = await supabase
+    .from('posts')
+    .select('id')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+
+  if (existing) {
+    const { data: post, error } = await supabase
+      .from('posts')
+      .update({ content: sanitized, updated_at: new Date().toISOString() })
+      .eq('id', existing.id)
+      .select()
+      .single()
+
+    if (error) return res.status(500).json({ error: 'Error al actualizar post' })
+
+    await supabase.from('post_likes').delete().eq('post_id', existing.id)
+
+    return res.json({ post, likesReset: true })
+  }
+
+  const { data: post, error } = await supabase
+    .from('posts')
+    .insert({ user_id: req.user.id, content: sanitized })
+    .select()
+    .single()
+
+  if (error) return res.status(500).json({ error: 'Error al crear post' })
+
+  res.status(201).json({ post })
+}))
+
+app.delete('/api/posts', auth, asyncHandler(async (req, res) => {
+  const { data: existing, error: findError } = await supabase
+    .from('posts')
+    .select('id')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+
+  if (findError) return res.status(500).json({ error: 'Error al buscar post' })
+  if (!existing) return res.status(404).json({ error: 'No tenés un post para eliminar' })
+
+  const { error } = await supabase.from('posts').delete().eq('id', existing.id)
+  if (error) return res.status(500).json({ error: 'Error al eliminar post' })
+
+  res.json({ deleted: true })
+}))
+
+app.get('/api/posts/mine', auth, asyncHandler(async (req, res) => {
+  const { data: post, error } = await supabase
+    .from('posts')
+    .select('*, post_likes(count)')
+    .eq('user_id', req.user.id)
+    .maybeSingle()
+
+  if (error) return res.status(500).json({ error: 'Error al obtener post' })
+
+  res.json({ post })
+}))
+
+app.get('/api/posts/feed', auth, asyncHandler(async (req, res) => {
+  const { data: posts, error } = await supabase
+    .from('posts')
+    .select(`
+      id,
+      content,
+      created_at,
+      updated_at,
+      user_id,
+      post_likes(count)
+    `)
+    .neq('user_id', req.user.id)
+    .order('created_at', { ascending: false })
+
+  if (error) return res.status(500).json({ error: 'Error al obtener feed' })
+
+  if (!posts || posts.length === 0) {
+    return res.json({ posts: [] })
+  }
+
+  const userIds = [...new Set(posts.map(p => p.user_id))]
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', userIds)
+
+  const profileMap = {}
+  if (profiles) {
+    profiles.forEach(pr => { profileMap[pr.id] = pr })
+  }
+
+  const postIds = posts.map(p => p.id)
+  const { data: myLikes } = await supabase
+    .from('post_likes')
+    .select('post_id')
+    .in('post_id', postIds)
+    .eq('user_id', req.user.id)
+
+  const likedPostIds = new Set(myLikes?.map(l => l.post_id) || [])
+
+  const { data: sentRequests } = await supabase
+    .from('friend_requests')
+    .select('receiver_id, status')
+    .eq('sender_id', req.user.id)
+    .in('receiver_id', userIds)
+
+  const { data: receivedRequests } = await supabase
+    .from('friend_requests')
+    .select('sender_id, status')
+    .eq('receiver_id', req.user.id)
+    .in('sender_id', userIds)
+
+  const friendRequestMap = {}
+  if (sentRequests) {
+    sentRequests.forEach(r => { friendRequestMap[r.receiver_id] = r.status })
+  }
+  if (receivedRequests) {
+    receivedRequests.forEach(r => {
+      if (!friendRequestMap[r.sender_id]) {
+        friendRequestMap[r.sender_id] = r.status
+      }
+    })
+  }
+
+  const enriched = posts.map(p => ({
+    id: p.id,
+    content: p.content,
+    created_at: p.created_at,
+    user_id: p.user_id,
+    username: profileMap[p.user_id]?.username || 'unknown',
+    display_name: profileMap[p.user_id]?.display_name || null,
+    avatar_url: profileMap[p.user_id]?.avatar_url || null,
+    likes_count: p.post_likes?.[0]?.count ?? 0,
+    liked_by_me: likedPostIds.has(p.id),
+    friend_request_status: friendRequestMap[p.user_id] || null,
+  })).filter(p => p.username !== 'unknown')
+
+  res.json({ posts: enriched })
+}))
+
+app.post('/api/posts/:id/unlike', auth, asyncHandler(async (req, res) => {
+  const { data: post, error: postError } = await supabase
+    .from('posts')
+    .select('id')
+    .eq('id', req.params.id)
+    .maybeSingle()
+
+  if (postError) return res.status(500).json({ error: 'Error al verificar post' })
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' })
+
+  const { error } = await supabase
+    .from('post_likes')
+    .delete()
+    .eq('post_id', post.id)
+    .eq('user_id', req.user.id)
+
+  if (error) return res.status(500).json({ error: 'Error al quitar like' })
+
+  const { count } = await supabase
+    .from('post_likes')
+    .select('*', { count: 'exact', head: true })
+    .eq('post_id', post.id)
+
+  res.json({ unliked: true, likesCount: count })
+}))
+
+app.get('/api/posts/:id', auth, asyncHandler(async (req, res) => {
+  const { data: post, error } = await supabase
+    .from('posts')
+    .select('*, post_likes(count)')
+    .eq('id', req.params.id)
+    .maybeSingle()
+
+  if (error) return res.status(500).json({ error: 'Error al obtener post' })
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' })
+
+  res.json({ post })
+}))
+
+app.post('/api/posts/:id/like', auth, asyncHandler(async (req, res) => {
+  const { data: post, error: postError } = await supabase
+    .from('posts')
+    .select('id, user_id')
+    .eq('id', req.params.id)
+    .maybeSingle()
+
+  if (postError) return res.status(500).json({ error: 'Error al verificar post' })
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' })
+  if (post.user_id === req.user.id) {
+    return res.status(400).json({ error: 'No podés dar like a tu propio post' })
+  }
+
+  const { error: insertError } = await supabase
+    .from('post_likes')
+    .insert({ post_id: post.id, user_id: req.user.id })
+
+  if (insertError) {
+    if (insertError.code === '23505') {
+      return res.status(409).json({ error: 'Ya le diste like a este post' })
+    }
+    return res.status(500).json({ error: 'Error al dar like' })
+  }
+
+  const { count } = await supabase
+    .from('post_likes')
+    .select('*', { count: 'exact', head: true })
+    .eq('post_id', post.id)
+
+  res.status(201).json({ liked: true, likesCount: count })
+}))
+
 app.use((err, req, res, next) => {
   console.error(err)
   res.status(500).json({ error: 'Error interno del servidor' })

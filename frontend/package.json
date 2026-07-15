@@ -12,6 +12,7 @@
     "node": ">=20.6.0"
   },
   "dependencies": {
+    "@number-flow/react": "^0.6.1",
     "@supabase/supabase-js": "^2.39.0",
     "lucide-react": "^1.24.0",
     "ogl": "^1.0.11",
