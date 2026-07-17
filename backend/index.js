@@ -44,7 +44,7 @@ app.use(cors({
   },
   credentials: true,
 }))
-app.use(express.json({ limit: '2mb' }))
+app.use(express.json({ limit: '10mb' }))
 app.use(cookieParser())
 
 const csrfProtection = (req, res, next) => {
@@ -363,8 +363,25 @@ app.post('/api/auth/google', authLimiter, asyncHandler(async (req, res) => {
   return res.json({ user: { id: user.id, email: user.email }, needsUsername: true })
 }))
 
-app.post('/api/auth/setup-username', auth, authLimiter, asyncHandler(async (req, res) => {
-  const { username, avatar } = req.body
+app.post('/api/auth/setup-username', authLimiter, asyncHandler(async (req, res) => {
+  const { username, avatar, access_token } = req.body
+
+  let user
+  const cookieToken = req.cookies['sb-access-token']
+
+  if (cookieToken) {
+    const { data, error } = await supabase.auth.getUser(cookieToken)
+    if (!error && data?.user) user = data.user
+  }
+
+  if (!user && access_token) {
+    const { data, error } = await supabase.auth.getUser(access_token)
+    if (!error && data?.user) user = data.user
+  }
+
+  if (!user) {
+    return res.status(401).json({ error: 'No autenticado' })
+  }
 
   if (!username) {
     return res.status(400).json({ error: 'El nombre de usuario es obligatorio' })
@@ -391,9 +408,9 @@ app.post('/api/auth/setup-username', auth, authLimiter, asyncHandler(async (req,
     return res.status(409).json({ error: 'Ese nombre de usuario ya está en uso' })
   }
 
-  let avatarUrl = avatar ? await uploadAvatar(req.user.id, avatar) : null
+  let avatarUrl = avatar ? await uploadAvatar(user.id, avatar) : null
 
-  const profileData = { id: req.user.id, username: lowerUsername, display_name: sanitizedUsername, email: req.user.email }
+  const profileData = { id: user.id, username: lowerUsername, display_name: sanitizedUsername, email: user.email }
   if (avatarUrl) profileData.avatar_url = avatarUrl
 
   const { data: profile, error: profileError } = await supabase
@@ -410,7 +427,7 @@ app.post('/api/auth/setup-username', auth, authLimiter, asyncHandler(async (req,
     profile.username = profile.display_name || profile.username
   }
 
-  auditLog('register_google_complete', req.user.id, req.user.email, { username, ip: req.ip, user_agent: req.headers['user-agent'] })
+  auditLog('register_google_complete', user.id, user.email, { username, ip: req.ip, user_agent: req.headers['user-agent'] })
   res.json({ profile })
 }))
 
@@ -1247,6 +1264,8 @@ app.delete('/api/notifications', auth, asyncHandler(async (req, res) => {
   res.json({ message: 'Notificaciones eliminadas' })
 }))
 
+const pendingFollowToggles = new Map()
+
 app.post('/api/follow/:username', auth, asyncHandler(async (req, res) => {
   const { username } = req.params
   const sanitized = sanitize(username)
@@ -1265,90 +1284,91 @@ app.post('/api/follow/:username', auth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'No podés seguirte a vos mismo' })
   }
 
-  const { error: insertError } = await supabase
-    .from('followers')
-    .insert({ follower_id: req.user.id, following_id: target.id })
-
-  if (insertError) {
-    if (insertError.code === '23505') {
-      return res.status(409).json({ error: 'Ya seguís a este usuario' })
-    }
-    return res.status(400).json({ error: 'Error al seguir al usuario' })
+  const key = `follow:${req.user.id}:${target.id}`
+  if (pendingFollowToggles.has(key)) {
+    clearTimeout(pendingFollowToggles.get(key).timer)
   }
 
-  const { data: existingUnfollow } = await supabase
-    .from('notifications')
-    .select('id')
-    .eq('user_id', target.id)
-    .eq('from_user_id', req.user.id)
-    .eq('type', 'unfollow')
-    .maybeSingle()
+  const timer = setTimeout(async () => {
+    pendingFollowToggles.delete(key)
 
-  let notif
+    const { error: insertError } = await supabase
+      .from('followers')
+      .insert({ follower_id: req.user.id, following_id: target.id })
 
-  if (existingUnfollow) {
-    const { data: updated } = await supabase
-      .from('notifications')
-      .update({ type: 'follow', created_at: new Date().toISOString(), read: false })
-      .eq('id', existingUnfollow.id)
-      .select()
-      .single()
+    if (insertError) {
+      if (insertError.code !== '23505') {
+        console.error('Error al seguir:', insertError)
+      }
+      return
+    }
 
-    notif = updated
-  } else {
-    const { data: existingFollow } = await supabase
+    const { data: existingUnfollow } = await supabase
       .from('notifications')
       .select('id')
       .eq('user_id', target.id)
       .eq('from_user_id', req.user.id)
-      .eq('type', 'follow')
+      .eq('type', 'unfollow')
       .maybeSingle()
 
-    if (!existingFollow) {
-      const { data: inserted } = await supabase
+    let notif
+
+    if (existingUnfollow) {
+      const { data: updated } = await supabase
         .from('notifications')
-        .insert({ user_id: target.id, from_user_id: req.user.id, type: 'follow' })
+        .update({ type: 'follow', created_at: new Date().toISOString(), read: false })
+        .eq('id', existingUnfollow.id)
         .select()
         .single()
 
-      notif = inserted
-    }
-  }
-
-  if (notif) {
-    const [{ data: fromProfile }, { data: isFollowingBackRow }] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('username, display_name, avatar_url')
-        .eq('id', req.user.id)
-        .maybeSingle(),
-      supabase
-        .from('followers')
+      notif = updated
+    } else {
+      const { data: existingFollow } = await supabase
+        .from('notifications')
         .select('id')
-        .eq('follower_id', target.id)
-        .eq('following_id', req.user.id)
-        .maybeSingle(),
-    ])
+        .eq('user_id', target.id)
+        .eq('from_user_id', req.user.id)
+        .eq('type', 'follow')
+        .maybeSingle()
 
-    const io = getIO()
-    if (io) {
-      io.to(target.id).emit('notification', {
-        notification: {
-          id: notif.id,
-          type: 'follow',
-          read: false,
-          createdAt: notif.created_at,
-          isFollowingBack: !!isFollowingBackRow,
-          fromUser: {
-            id: req.user.id,
-            username: sanitize(fromProfile?.display_name || fromProfile?.username || 'Desconocido'),
-            avatar_url: fromProfile?.avatar_url || null,
-          },
-        },
-      })
+      if (!existingFollow) {
+        const { data: inserted } = await supabase
+          .from('notifications')
+          .insert({ user_id: target.id, from_user_id: req.user.id, type: 'follow' })
+          .select()
+          .single()
+
+        notif = inserted
+      }
     }
-  }
 
+    if (notif) {
+      const [{ data: fromProfile }, { data: isFollowingBackRow }] = await Promise.all([
+        supabase.from('profiles').select('username, display_name, avatar_url').eq('id', req.user.id).maybeSingle(),
+        supabase.from('followers').select('id').eq('follower_id', target.id).eq('following_id', req.user.id).maybeSingle(),
+      ])
+
+      const io = getIO()
+      if (io) {
+        io.to(target.id).emit('notification', {
+          notification: {
+            id: notif.id,
+            type: 'follow',
+            read: false,
+            createdAt: notif.created_at,
+            isFollowingBack: !!isFollowingBackRow,
+            fromUser: {
+              id: req.user.id,
+              username: sanitize(fromProfile?.display_name || fromProfile?.username || 'Desconocido'),
+              avatar_url: fromProfile?.avatar_url || null,
+            },
+          },
+        })
+      }
+    }
+  }, 2000)
+
+  pendingFollowToggles.set(key, { timer })
   res.json({ message: 'Usuario seguido' })
 }))
 
@@ -1366,89 +1386,100 @@ app.delete('/api/follow/:username', auth, asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Usuario no encontrado' })
   }
 
-  const { error: deleteError } = await supabase
-    .from('followers')
-    .delete()
-    .eq('follower_id', req.user.id)
-    .eq('following_id', target.id)
-
-  if (deleteError) {
-    return res.status(400).json({ error: 'Error al dejar de seguir' })
+  const key = `follow:${req.user.id}:${target.id}`
+  if (pendingFollowToggles.has(key)) {
+    clearTimeout(pendingFollowToggles.get(key).timer)
   }
 
-  const { data: existingFollow } = await supabase
-    .from('notifications')
-    .select('id')
-    .eq('user_id', target.id)
-    .eq('from_user_id', req.user.id)
-    .eq('type', 'follow')
-    .maybeSingle()
+  const timer = setTimeout(async () => {
+    pendingFollowToggles.delete(key)
 
-  let notif
+    const { error: deleteError } = await supabase
+      .from('followers')
+      .delete()
+      .eq('follower_id', req.user.id)
+      .eq('following_id', target.id)
 
-  if (existingFollow) {
-    const { data: updated } = await supabase
-      .from('notifications')
-      .update({ type: 'unfollow', created_at: new Date().toISOString(), read: false })
-      .eq('id', existingFollow.id)
-      .select()
-      .single()
+    if (deleteError) {
+      console.error('Error al dejar de seguir:', deleteError)
+      return
+    }
 
-    notif = updated
-  } else {
-    const { data: existingUnfollow } = await supabase
+    const { data: existingFollow } = await supabase
       .from('notifications')
       .select('id')
       .eq('user_id', target.id)
       .eq('from_user_id', req.user.id)
-      .eq('type', 'unfollow')
+      .eq('type', 'follow')
       .maybeSingle()
 
-    if (existingUnfollow) {
+    let notif
+
+    if (existingFollow) {
       const { data: updated } = await supabase
         .from('notifications')
-        .update({ created_at: new Date().toISOString(), read: false })
-        .eq('id', existingUnfollow.id)
+        .update({ type: 'unfollow', created_at: new Date().toISOString(), read: false })
+        .eq('id', existingFollow.id)
         .select()
         .single()
 
       notif = updated
     } else {
-      const { data: inserted } = await supabase
+      const { data: existingUnfollow } = await supabase
         .from('notifications')
-        .insert({ user_id: target.id, from_user_id: req.user.id, type: 'unfollow' })
-        .select()
-        .single()
+        .select('id')
+        .eq('user_id', target.id)
+        .eq('from_user_id', req.user.id)
+        .eq('type', 'unfollow')
+        .maybeSingle()
 
-      notif = inserted
+      if (existingUnfollow) {
+        const { data: updated } = await supabase
+          .from('notifications')
+          .update({ created_at: new Date().toISOString(), read: false })
+          .eq('id', existingUnfollow.id)
+          .select()
+          .single()
+
+        notif = updated
+      } else {
+        const { data: inserted } = await supabase
+          .from('notifications')
+          .insert({ user_id: target.id, from_user_id: req.user.id, type: 'unfollow' })
+          .select()
+          .single()
+
+        notif = inserted
+      }
     }
-  }
 
-  if (notif) {
-    const [{ data: fromProfile }, { data: isFollowingBackRow }] = await Promise.all([
-      supabase.from('profiles').select('id, username, display_name, avatar_url').eq('id', req.user.id).maybeSingle(),
-      supabase.from('followers').select('id').eq('follower_id', target.id).eq('following_id', req.user.id).maybeSingle(),
-    ])
+    if (notif) {
+      const [{ data: fromProfile }, { data: isFollowingBackRow }] = await Promise.all([
+        supabase.from('profiles').select('id, username, display_name, avatar_url').eq('id', req.user.id).maybeSingle(),
+        supabase.from('followers').select('id').eq('follower_id', target.id).eq('following_id', req.user.id).maybeSingle(),
+      ])
 
-    const io = getIO()
-    if (io && fromProfile) {
-      io.to(target.id).emit('notification', {
-        notification: {
-          id: notif.id,
-          type: 'unfollow',
-          read: false,
-          createdAt: notif.created_at,
-          isFollowingBack: !!isFollowingBackRow,
-          fromUser: {
-            id: req.user.id,
-            username: sanitize(fromProfile?.display_name || fromProfile?.username || 'Desconocido'),
-            avatar_url: fromProfile?.avatar_url || null,
+      const io = getIO()
+      if (io && fromProfile) {
+        io.to(target.id).emit('notification', {
+          notification: {
+            id: notif.id,
+            type: 'unfollow',
+            read: false,
+            createdAt: notif.created_at,
+            isFollowingBack: !!isFollowingBackRow,
+            fromUser: {
+              id: req.user.id,
+              username: sanitize(fromProfile?.display_name || fromProfile?.username || 'Desconocido'),
+              avatar_url: fromProfile?.avatar_url || null,
+            },
           },
-        },
-      })
+        })
+      }
     }
-  }
+  }, 2000)
 
+  pendingFollowToggles.set(key, { timer })
   res.json({ message: 'Dejaste de seguir al usuario' })
 }))
 
@@ -2202,6 +2233,46 @@ app.get('/api/posts/feed', auth, asyncHandler(async (req, res) => {
   res.json({ posts: enriched })
 }))
 
+const pendingLikeToggles = new Map()
+
+app.post('/api/posts/:id/like', auth, asyncHandler(async (req, res) => {
+  const { data: post, error: postError } = await supabase
+    .from('posts')
+    .select('id, user_id')
+    .eq('id', req.params.id)
+    .maybeSingle()
+
+  if (postError) return res.status(500).json({ error: 'Error al verificar post' })
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' })
+  if (post.user_id === req.user.id) {
+    return res.status(400).json({ error: 'No podés dar like a tu propio post' })
+  }
+
+  const key = `${req.user.id}:${req.params.id}`
+  if (pendingLikeToggles.has(key)) {
+    clearTimeout(pendingLikeToggles.get(key).timer)
+  }
+
+  const timer = setTimeout(async () => {
+    pendingLikeToggles.delete(key)
+    const { error } = await supabase
+      .from('post_likes')
+      .insert({ post_id: post.id, user_id: req.user.id })
+    if (error && error.code !== '23505') {
+      console.error('Error al dar like:', error)
+    }
+  }, 2000)
+
+  pendingLikeToggles.set(key, { timer })
+
+  const { count } = await supabase
+    .from('post_likes')
+    .select('*', { count: 'exact', head: true })
+    .eq('post_id', post.id)
+
+  res.status(201).json({ liked: true, likesCount: count })
+}))
+
 app.post('/api/posts/:id/unlike', auth, asyncHandler(async (req, res) => {
   const { data: post, error: postError } = await supabase
     .from('posts')
@@ -2212,13 +2283,22 @@ app.post('/api/posts/:id/unlike', auth, asyncHandler(async (req, res) => {
   if (postError) return res.status(500).json({ error: 'Error al verificar post' })
   if (!post) return res.status(404).json({ error: 'Post no encontrado' })
 
-  const { error } = await supabase
-    .from('post_likes')
-    .delete()
-    .eq('post_id', post.id)
-    .eq('user_id', req.user.id)
+  const key = `${req.user.id}:${req.params.id}`
+  if (pendingLikeToggles.has(key)) {
+    clearTimeout(pendingLikeToggles.get(key).timer)
+  }
 
-  if (error) return res.status(500).json({ error: 'Error al quitar like' })
+  const timer = setTimeout(async () => {
+    pendingLikeToggles.delete(key)
+    const { error } = await supabase
+      .from('post_likes')
+      .delete()
+      .eq('post_id', post.id)
+      .eq('user_id', req.user.id)
+    if (error) console.error('Error al quitar like:', error)
+  }, 2000)
+
+  pendingLikeToggles.set(key, { timer })
 
   const { count } = await supabase
     .from('post_likes')
@@ -2241,40 +2321,17 @@ app.get('/api/posts/:id', auth, asyncHandler(async (req, res) => {
   res.json({ post })
 }))
 
-app.post('/api/posts/:id/like', auth, asyncHandler(async (req, res) => {
-  const { data: post, error: postError } = await supabase
-    .from('posts')
-    .select('id, user_id')
-    .eq('id', req.params.id)
-    .maybeSingle()
-
-  if (postError) return res.status(500).json({ error: 'Error al verificar post' })
-  if (!post) return res.status(404).json({ error: 'Post no encontrado' })
-  if (post.user_id === req.user.id) {
-    return res.status(400).json({ error: 'No podés dar like a tu propio post' })
-  }
-
-  const { error: insertError } = await supabase
-    .from('post_likes')
-    .insert({ post_id: post.id, user_id: req.user.id })
-
-  if (insertError) {
-    if (insertError.code === '23505') {
-      return res.status(409).json({ error: 'Ya le diste like a este post' })
-    }
-    return res.status(500).json({ error: 'Error al dar like' })
-  }
-
-  const { count } = await supabase
-    .from('post_likes')
-    .select('*', { count: 'exact', head: true })
-    .eq('post_id', post.id)
-
-  res.status(201).json({ liked: true, likesCount: count })
-}))
-
 app.use((err, req, res, next) => {
   console.error(err)
+
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'La imagen es demasiado grande. Usá una de menos de 10 MB.' })
+  }
+
+  if (err.status && err.status < 500) {
+    return res.status(err.status).json({ error: err.message })
+  }
+
   res.status(500).json({ error: 'Error interno del servidor' })
 })
 

@@ -16,7 +16,6 @@ export default function PublicProfile() {
   const [currentUserLoading, setCurrentUserLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const [followLoading, setFollowLoading] = useState(false)
   const [requestLoading, setRequestLoading] = useState(false)
   const [showFollowers, setShowFollowers] = useState(false)
   const [showFriends, setShowFriends] = useState(false)
@@ -51,26 +50,18 @@ export default function PublicProfile() {
       .finally(() => setLoading(false))
   }, [username])
 
-  const handleFollow = async () => {
-    if (followLoading) return
-    setFollowLoading(true)
+  const handleFollow = () => {
     setProfile(prev => ({ ...prev, is_following: true, follower_count: prev.follower_count + 1 }))
-    const res = await api(`/api/follow/${encodeURIComponent(username)}`, { method: 'POST' })
-    if (!res.ok) {
+    api(`/api/follow/${encodeURIComponent(username)}`, { method: 'POST' }).catch(() => {
       setProfile(prev => ({ ...prev, is_following: false, follower_count: prev.follower_count - 1 }))
-    }
-    setFollowLoading(false)
+    })
   }
 
-  const handleUnfollow = async () => {
-    if (followLoading) return
-    setFollowLoading(true)
+  const handleUnfollow = () => {
     setProfile(prev => ({ ...prev, is_following: false, follower_count: prev.follower_count - 1 }))
-    const res = await api(`/api/follow/${encodeURIComponent(username)}`, { method: 'DELETE' })
-    if (!res.ok) {
+    api(`/api/follow/${encodeURIComponent(username)}`, { method: 'DELETE' }).catch(() => {
       setProfile(prev => ({ ...prev, is_following: true, follower_count: prev.follower_count + 1 }))
-    }
-    setFollowLoading(false)
+    })
   }
 
   const handleSendMessage = async () => {
@@ -207,16 +198,14 @@ export default function PublicProfile() {
                 {profile.is_following ? (
                   <button
                     onClick={handleUnfollow}
-                    disabled={followLoading}
-                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
+                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition"
                   >
                     Dejar de seguir
                   </button>
                 ) : (
                   <button
                     onClick={handleFollow}
-                    disabled={followLoading}
-                    className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                    className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
                     style={{ backgroundColor: '#6659ff' }}
                   >
                     Seguir

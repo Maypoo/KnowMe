@@ -5,6 +5,7 @@ import { ArrowLeft, Search, X, Plus, User, Home as HomeIcon, Users, Send, Bell, 
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from '../components/Avatar'
+import Feed from '../components/Feed'
 import FriendSearch from '../components/FriendSearch'
 import FriendRequests from '../components/FriendRequests'
 import FriendsList from '../components/FriendsList'
@@ -74,10 +75,6 @@ export default function Home() {
     } catch (err) { console.error(err); return [] }
   })
   const voiceCallRef = useRef(null)
-  const [feedPosts, setFeedPosts] = useState([])
-  const [feedLoading, setFeedLoading] = useState(false)
-  const [sendingRequest, setSendingRequest] = useState(null)
-  const [likingPostId, setLikingPostId] = useState(null)
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -271,70 +268,6 @@ export default function Home() {
     if (!profile) return
     fetchMyPost()
   }, [profile, fetchMyPost])
-
-  const fetchFeed = useCallback(async () => {
-    setFeedLoading(true)
-    try {
-      const res = await api('/api/posts/feed')
-      const data = await res.json()
-      setFeedPosts(data.posts || [])
-    } catch (err) {
-      console.error(err)
-      setFeedPosts([])
-    }
-    setFeedLoading(false)
-  }, [])
-
-  useEffect(() => {
-    if (!profile || view !== 'home') return
-    fetchFeed()
-  }, [profile, view, fetchFeed])
-
-  const handleFeedLike = async (postId, liked) => {
-    if (likingPostId) return
-    setLikingPostId(postId)
-    setFeedPosts(prev => prev.map(p =>
-      p.id === postId
-        ? { ...p, likes_count: liked ? p.likes_count - 1 : p.likes_count + 1, liked_by_me: !liked }
-        : p
-    ))
-    const endpoint = liked ? `/api/posts/${postId}/unlike` : `/api/posts/${postId}/like`
-    try {
-      const res = await api(endpoint, { method: 'POST' })
-      if (!res.ok) {
-        setFeedPosts(prev => prev.map(p =>
-          p.id === postId
-            ? { ...p, likes_count: liked ? p.likes_count + 1 : p.likes_count - 1, liked_by_me: liked }
-            : p
-        ))
-      }
-    } catch (err) {
-      setFeedPosts(prev => prev.map(p =>
-        p.id === postId
-          ? { ...p, likes_count: liked ? p.likes_count + 1 : p.likes_count - 1, liked_by_me: liked }
-          : p
-      ))
-    }
-    setLikingPostId(null)
-  }
-
-  const handleSendFriendRequest = async (post) => {
-    setSendingRequest(post.id)
-    try {
-      const res = await api('/api/friends/request', {
-        method: 'POST',
-        body: JSON.stringify({ username: post.username }),
-      })
-      if (res.ok) {
-        setFeedPosts(prev => prev.map(p =>
-          p.id === post.id ? { ...p, friend_request_status: 'pending' } : p
-        ))
-      }
-    } catch (err) {
-      console.error(err)
-    }
-    setSendingRequest(null)
-  }
 
   const handlePublish = async () => {
     if (!postContent.trim() || publishing) return
@@ -615,70 +548,7 @@ export default function Home() {
 
           <div className="pb-20 flex-1 flex flex-col min-h-0">
             {view === 'home' ? (
-              <div className="flex-1 overflow-y-auto snap-y snap-mandatory scroll-smooth no-scrollbar">
-                {feedLoading ? (
-                  <div className="h-full flex items-center justify-center">
-                    <p className="text-zinc-500">Cargando posteos...</p>
-                  </div>
-                ) : feedPosts.length === 0 ? (
-                  <div className="h-full flex items-center justify-center">
-                    <p className="text-zinc-500">No hay posteos aún</p>
-                  </div>
-                ) : (
-                  feedPosts.map(post => (
-                    <div key={post.id} className="h-full snap-start flex flex-col items-center justify-center px-6">
-                      <button onClick={() => navigate('/' + post.username)} className="flex items-center gap-3 mb-6 hover:opacity-80 transition">
-                        <Avatar src={post.avatar_url} size={40} />
-                        <span className="text-zinc-100 font-medium text-sm">{post.display_name || post.username}</span>
-                      </button>
-                      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-                        <p className="text-zinc-100 text-lg leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => handleFeedLike(post.id, post.liked_by_me)}
-                          disabled={likingPostId === post.id}
-                          className="flex items-center gap-2 px-5 py-2.5 rounded-xl transition hover:opacity-90 disabled:opacity-50"
-                          style={{ backgroundColor: '#6659ff' }}
-                        >
-                          <Heart
-                            size={20}
-                            strokeWidth={2.5}
-                            className={post.liked_by_me ? 'text-white fill-white' : 'text-white'}
-                          />
-                          <span className="text-sm font-medium text-white">
-                            {post.likes_count}
-                          </span>
-                        </button>
-                        {post.friend_request_status === 'accepted' ? (
-                          <span
-                            className="rounded-xl px-4 py-2.5 text-sm text-white opacity-60"
-                            style={{ backgroundColor: '#6659ff' }}
-                          >
-                            Amigos
-                          </span>
-                        ) : post.friend_request_status === 'pending' ? (
-                          <span
-                            className="rounded-xl px-4 py-2.5 text-sm text-white opacity-60"
-                            style={{ backgroundColor: '#6659ff' }}
-                          >
-                            Solicitud enviada
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleSendFriendRequest(post)}
-                            disabled={sendingRequest === post.id}
-                            className="rounded-xl px-4 py-2.5 text-sm text-white transition hover:opacity-90 disabled:opacity-50"
-                            style={{ backgroundColor: '#6659ff' }}
-                          >
-                            {sendingRequest === post.id ? 'Enviando...' : 'Enviar solicitud'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <Feed />
             ) : view === 'plus' ? (
               <div className="flex-1 flex items-center justify-center px-6">
                 <div className="w-full max-w-md flex flex-col items-center gap-4 h-60">

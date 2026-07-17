@@ -66,7 +66,7 @@ export default function AuthCallback() {
           }
 
           if (data.needsUsername) {
-            navigate('/setup-username', { state: { email: data.user.email } })
+            navigate('/setup-username', { state: { email: data.user.email, accessToken } })
           } else {
             navigate('/')
           }
@@ -113,7 +113,7 @@ export default function AuthCallback() {
         }
 
         if (data.needsUsername) {
-          navigate('/setup-username', { state: { email: data.user.email } })
+          navigate('/setup-username', { state: { email: data.user.email, accessToken: session.access_token } })
         } else {
           navigate('/')
         }

@@ -7,19 +7,71 @@ export default function SetupUsername() {
   const navigate = useNavigate()
   const location = useLocation()
   const email = location.state?.email || ''
+  const accessToken = location.state?.accessToken
   const [username, setUsername] = useState('')
   const [avatarPreview, setAvatarPreview] = useState(null)
   const [avatarFile, setAvatarFile] = useState(null)
   const [error, setError] = useState(null)
+  const [usernameError, setUsernameError] = useState(null)
+  const [usernameAvailable, setUsernameAvailable] = useState(null)
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef(null)
+  const checkTimerRef = useRef(null)
 
-  const handleUsernameChange = (e) => {
-    setUsername(e.target.value.replace(/[^a-zA-Z0-9_.]/g, ''))
-    setError(null)
+  const checkUsernameAvailability = async (value) => {
+    if (!/^@(?=.*[a-zA-Z])[a-zA-Z0-9_.]+$/.test(value) || value.length < 2 || value.length > 21) {
+      setUsernameAvailable(false)
+      setUsernameError('Debe tener al menos 1 letra, solo letras, números, guión bajo y punto (de 1 a 20 caracteres, sin contar el @)')
+      return
+    }
+
+    try {
+      const res = await api(`/api/username/check?q=${encodeURIComponent(value)}`)
+      const data = await res.json()
+      setUsernameAvailable(data.available)
+      if (!data.available) setUsernameError(data.error)
+    } catch {
+      setUsernameError('Error al verificar disponibilidad')
+    }
   }
 
-  const handleAvatarSelect = (e) => {
+  const handleUsernameChange = (e) => {
+    const value = e.target.value.replace(/[^a-zA-Z0-9_.]/g, '')
+    setUsername(value)
+    setError(null)
+    setUsernameError(null)
+    setUsernameAvailable(null)
+
+    if (checkTimerRef.current) clearTimeout(checkTimerRef.current)
+
+    if (value) {
+      checkTimerRef.current = setTimeout(() => checkUsernameAvailability('@' + value), 500)
+    }
+  }
+
+  const compressImage = (file, maxSize = 800) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        let w = img.width, h = img.height
+        if (w > maxSize || h > maxSize) {
+          const ratio = Math.min(maxSize / w, maxSize / h)
+          w = Math.round(w * ratio)
+          h = Math.round(h * ratio)
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', 0.85))
+      }
+      img.onerror = reject
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
+  const handleAvatarSelect = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -28,13 +80,14 @@ export default function SetupUsername() {
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = () => {
-      setAvatarPreview(reader.result)
+    try {
+      const compressed = await compressImage(file)
+      setAvatarPreview(compressed)
       setAvatarFile(file)
       setError(null)
+    } catch {
+      setError('Error al procesar la imagen')
     }
-    reader.readAsDataURL(file)
   }
 
   const handleRemoveAvatar = () => {
@@ -46,6 +99,8 @@ export default function SetupUsername() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError(null)
+    setUsernameError(null)
+    setUsernameAvailable(null)
 
     const fullUsername = '@' + username
     if (fullUsername.length < 2 || fullUsername.length > 21 || !/^@(?=.*[a-zA-Z])[a-zA-Z0-9_.]+$/.test(fullUsername)) {
@@ -56,7 +111,7 @@ export default function SetupUsername() {
     setLoading(true)
 
     try {
-      const body = { username: fullUsername }
+      const body = { username: fullUsername, access_token: accessToken }
       if (avatarPreview) body.avatar = avatarPreview
 
       const res = await api('/api/auth/setup-username', {
@@ -133,6 +188,12 @@ export default function SetupUsername() {
                 required
               />
             </div>
+            {usernameError && (
+              <p className="text-xs text-red-400 mt-2">{usernameError}</p>
+            )}
+            {usernameAvailable && (
+              <p className="text-xs text-green-400 mt-2">El usuario está disponible</p>
+            )}
           </div>
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <button
