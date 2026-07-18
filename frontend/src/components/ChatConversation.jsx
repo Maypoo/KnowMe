@@ -1,59 +1,130 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, Phone, Send } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
 
-export default function ChatConversation({ chat, onBack, profile, onStartCall, onChatRead }) {
+export default function ChatConversation({ chat, onBack, profile, onStartCall }) {
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [isFriend, setIsFriend] = useState(chat.isFriend ?? true)
   const [friendRequestSent, setFriendRequestSent] = useState(false)
   const bottomRef = useRef(null)
 
+  const { data, isLoading } = useQuery({
+    queryKey: ['messages', chat.id],
+    queryFn: async () => {
+      const res = await api(`/api/chats/${chat.id}/messages`)
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error || 'Error al cargar mensajes')
+      return body
+    },
+  })
+
+  const messages = data?.messages ?? []
+
+  function clearUnreadForChat() {
+    if (!chat?.id) return
+    const chats = queryClient.getQueryData(['chats'])
+    if (chats) {
+      const updated = chats.map(c =>
+        c.id === chat.id ? { ...c, unreadCount: 0 } : c
+      )
+      queryClient.setQueryData(['chats'], updated)
+      const newTotal = updated.reduce((sum, c) => sum + (c.unreadCount || 0), 0)
+      queryClient.setQueryData(['chatsUnread'], newTotal)
+      return
+    }
+    queryClient.setQueryData(['chatsUnread'], 0)
+  }
+
+  useEffect(() => {
+    if (data) {
+      if (typeof data.isFriend === 'boolean') setIsFriend(data.isFriend)
+      if (data.pendingRequest) setFriendRequestSent(true)
+    }
+  }, [data])
+
   useEffect(() => {
     if (!chat?.id) return
-    setLoading(true)
-    setMessages([])
+    queryClient.invalidateQueries({ queryKey: ['messages', chat.id] })
+    clearUnreadForChat()
+    api(`/api/chats/${chat.id}/read`, { method: 'POST' }).catch(() => {})
+    return () => {
+      api(`/api/chats/${chat.id}/read`, { method: 'POST' }).catch(() => {})
+    }
+  }, [chat?.id, queryClient])
 
-    api(`/api/chats/${chat.id}/messages`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.messages) setMessages(data.messages)
-        if (typeof data.isFriend === 'boolean') setIsFriend(data.isFriend)
-        if (data.pendingRequest) setFriendRequestSent(true)
-      })
-      .finally(() => setLoading(false))
-
-    api(`/api/chats/${chat.id}/read`, { method: 'POST' }).then(() => onChatRead?.()).catch((err) => { console.error(err) })
-  }, [chat?.id])
+  useEffect(() => {
+    const handleConnect = () => {
+      queryClient.invalidateQueries({ queryKey: ['messages', chat.id] })
+    }
+    socket.on('connect', handleConnect)
+    return () => socket.off('connect', handleConnect)
+  }, [chat.id, queryClient])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   useEffect(() => {
-    const handleNewMessage = (data) => {
-      if (data.chatId === chat.id) {
-        setMessages(prev => {
-          if (prev.some(m => m.id === data.message.id)) return prev
-          return [...prev, data.message]
+    const handleNewMessage = (msgData) => {
+      if (msgData.chatId === chat.id) {
+        queryClient.setQueryData(['messages', chat.id], (old) => {
+          if (!old) return { messages: [msgData.message] }
+          if (old.messages?.some(m => m.id === msgData.message.id)) return old
+          return { ...old, messages: [...old.messages, msgData.message] }
         })
+        clearUnreadForChat()
+        api(`/api/chats/${chat.id}/read`, { method: 'POST' }).catch(() => {})
       }
     }
 
     socket.on('new_message', handleNewMessage)
     return () => socket.off('new_message', handleNewMessage)
-  }, [chat.id])
+  }, [chat.id, queryClient])
 
-  const handleSend = async () => {
+  const sendMutation = useMutation({
+    mutationFn: async (content) => {
+      const res = await api(`/api/chats/${chat.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      })
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.error || 'Error al enviar el mensaje')
+      }
+      return res.json()
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(['messages', chat.id], (old) => {
+        if (!old) return { messages: [result.message] }
+        return { ...old, messages: [...old.messages, result.message] }
+      })
+      queryClient.setQueryData(['chats'], (old) => {
+        if (!old) return old
+        const updated = old.map(c =>
+          c.id === chat.id
+            ? { ...c, lastMessage: result.message, updatedAt: result.message.created_at, unreadCount: 0 }
+            : c
+        )
+        const newTotal = updated.reduce((sum, c) => sum + (c.unreadCount || 0), 0)
+        queryClient.setQueryData(['chatsUnread'], newTotal)
+        return updated
+      })
+    },
+    onError: (err) => {
+      setError(err.message)
+    },
+  })
+
+  const handleSend = () => {
     const text = input.trim()
-    if (!text || sending) return
+    if (!text || sendMutation.isPending) return
 
     if (text.length > 300) {
       setError('El mensaje no puede superar los 300 caracteres')
@@ -61,25 +132,8 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
     }
 
     setError('')
-    setSending(true)
     setInput('')
-    try {
-      const res = await api(`/api/chats/${chat.id}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ content: text }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setMessages(prev => [...prev, data.message])
-      } else {
-        setError(data.error || 'Error al enviar el mensaje')
-      }
-    } catch (err) {
-      console.error(err)
-      setError('Error al enviar el mensaje')
-    } finally {
-      setSending(false)
-    }
+    sendMutation.mutate(text)
   }
 
   const handleOpenProfile = () => {
@@ -125,10 +179,12 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
         <button onClick={onBack} className="text-zinc-400 hover:text-zinc-100 transition">
           <ChevronLeft size={24} />
         </button>
-        <button onClick={handleOpenProfile} className="flex items-center gap-3 hover:opacity-80 transition flex-1 min-w-0">
-          <Avatar src={chat.otherUser?.avatar_url} size={36} />
-          <span className="text-zinc-100 text-sm font-medium truncate">{chat.otherUser?.username}</span>
-        </button>
+        <div className="flex-1 min-w-0">
+          <button onClick={handleOpenProfile} className="inline-flex items-center gap-3 hover:opacity-80 transition">
+            <Avatar src={chat.otherUser?.avatar_url} size={36} />
+            <span className="text-zinc-100 text-sm font-medium truncate">{chat.otherUser?.username}</span>
+          </button>
+        </div>
         {isFriend && (
           <button
             onClick={() => onStartCall?.(chat.otherUser)}
@@ -141,7 +197,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-2 mb-4">
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-zinc-600 text-sm">Cargando...</p>
           </div>
@@ -236,7 +292,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, o
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || sending}
+            disabled={!input.trim() || sendMutation.isPending}
             className="rounded-full p-2.5 transition disabled:opacity-40"
             style={{ backgroundColor: '#6659ff' }}
           >

@@ -1,38 +1,31 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
+import { SkeletonBox, SkeletonAvatar } from './Skeleton'
 
-export default function PendingRequests({ refreshTrigger }) {
+export default function PendingRequests() {
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [requests, setRequests] = useState([])
-  const [loading, setLoading] = useState(true)
   const [confirming, setConfirming] = useState(null)
-  const [cancelling, setCancelling] = useState(false)
 
-  const fetchPending = useCallback(async () => {
-    try {
+  const { data: requests = [], isLoading } = useQuery({
+    queryKey: ['pendingRequests'],
+    queryFn: async () => {
       const res = await api('/api/friends/pending')
       const data = await res.json()
-      if (res.ok) {
-        setRequests(data.requests)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchPending()
-  }, [fetchPending, refreshTrigger])
+      return data.requests || []
+    },
+  })
 
   useEffect(() => {
     const removeRequest = (data) => {
-      setRequests(prev => prev.filter(r => r.id !== data.id))
+      queryClient.setQueryData(['pendingRequests'], (old) =>
+        (old || []).filter(r => r.id !== data.id)
+      )
     }
     socket.on('friend_request_updated', removeRequest)
     socket.on('friend_request_cancelled', removeRequest)
@@ -40,30 +33,42 @@ export default function PendingRequests({ refreshTrigger }) {
       socket.off('friend_request_updated', removeRequest)
       socket.off('friend_request_cancelled', removeRequest)
     }
-  }, [])
+  }, [queryClient])
 
-  const handleCancel = async () => {
-    if (!confirming) return
-    setCancelling(true)
-    try {
-      const res = await api(`/api/friends/request/${confirming.id}`, { method: 'DELETE' })
-      if (res.ok) {
-        setRequests(prev => prev.filter(r => r.id !== confirming.id))
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setCancelling(false)
-      setConfirming(null)
-    }
+  const cancelMutation = useMutation({
+    mutationFn: async (request) => {
+      const res = await api(`/api/friends/request/${request.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Error al cancelar solicitud')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
+    },
+  })
+
+  const handleCancel = () => {
+    if (!confirming || cancelMutation.isPending) return
+    cancelMutation.mutate(confirming, {
+      onSettled: () => setConfirming(null),
+    })
   }
-
-  if (loading) return null
 
   return (
     <div className="flex-1 flex flex-col">
       <h2 className="text-center text-zinc-300 text-lg font-semibold mb-6">Solicitudes enviadas</h2>
-      {requests.length === 0 ? (
+      {isLoading ? (
+        <ul className="space-y-1">
+          {[1,2,3,4].map(i => (
+            <li key={i} className="bg-zinc-900 rounded-lg px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <SkeletonAvatar size={32} />
+                <SkeletonBox className="h-4 w-24" />
+              </div>
+              <SkeletonBox className="h-4 w-4" />
+            </li>
+          ))}
+        </ul>
+      ) : requests.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <p className="text-zinc-600 text-sm text-center">No hay nadie por aca.</p>
         </div>
@@ -102,10 +107,10 @@ export default function PendingRequests({ refreshTrigger }) {
               </button>
               <button
                 onClick={handleCancel}
-                disabled={cancelling}
+                disabled={cancelMutation.isPending}
                 className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm transition disabled:opacity-50"
               >
-                {cancelling ? 'Cancelando...' : 'Aceptar'}
+                {cancelMutation.isPending ? 'Cancelando...' : 'Aceptar'}
               </button>
             </div>
           </div>

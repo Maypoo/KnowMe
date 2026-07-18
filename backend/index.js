@@ -1981,6 +1981,21 @@ app.post('/api/chats/:chatId/read', auth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Error al marcar como leído' })
   }
 
+  const io = getIO()
+  if (io) {
+    const { data: participants } = await supabase
+      .from('chat_participants')
+      .select('user_id')
+      .eq('chat_id', chatId)
+      .neq('user_id', req.user.id)
+
+    if (participants) {
+      for (const p of participants) {
+        io.to(p.user_id).emit('messages_read', { chatId, userId: req.user.id })
+      }
+    }
+  }
+
   res.json({ message: 'Marcado como leído' })
 }))
 

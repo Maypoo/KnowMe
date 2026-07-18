@@ -14,6 +14,7 @@
   "dependencies": {
     "@number-flow/react": "^0.6.1",
     "@supabase/supabase-js": "^2.39.0",
+    "@tanstack/react-query": "^5.101.2",
     "lucide-react": "^1.24.0",
     "ogl": "^1.0.11",
     "react": "^18.2.0",

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient, useQuery } from '@tanstack/react-query'
 import NumberFlow from '@number-flow/react'
 import { ArrowLeft, Search, X, Plus, User, Home as HomeIcon, Users, Send, Bell, Edit, Heart, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
@@ -40,30 +41,22 @@ function loadSavedState() {
 }
 
 export default function Home() {
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const saved = useRef(loadSavedState())
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState(saved.current?.tab ?? 'friends')
-  const [requestsRefresh, setRequestsRefresh] = useState(0)
-  const [pendingRefresh, setPendingRefresh] = useState(0)
-  const [friendsRefresh, setFriendsRefresh] = useState(0)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [view, setView] = useState(saved.current?.view ?? 'friends')
   const [chatsView, setChatsView] = useState(saved.current?.chatsView ?? 'list')
   const [activeChat, setActiveChat] = useState(saved.current?.activeChat ?? null)
-  const [chatsRefreshTrigger, setChatsRefreshTrigger] = useState(0)
-  const [pendingRequestsCount, setPendingRequestsCount] = useState(0)
   const [postContent, setPostContent] = useState('')
-  const [myPost, setMyPost] = useState(null)
   const [publishing, setPublishing] = useState(false)
-  const [postLikes, setPostLikes] = useState(0)
   const [editing, setEditing] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0)
-  const [notificationsCount, setNotificationsCount] = useState(0)
   const dropdownRef = useRef(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -75,6 +68,8 @@ export default function Home() {
     } catch (err) { console.error(err); return [] }
   })
   const voiceCallRef = useRef(null)
+  const viewRef = useRef(view)
+  useEffect(() => { viewRef.current = view }, [view])
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -111,32 +106,51 @@ export default function Home() {
     }
 
     const handleRequestReceived = () => {
-      setRequestsRefresh(t => t + 1)
+      queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
+      queryClient.invalidateQueries({ queryKey: ['friendRequests'] })
     }
 
     const handleRequestUpdated = () => {
-      setPendingRefresh(t => t + 1)
-      setFriendsRefresh(t => t + 1)
+      queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['friends'] })
+      queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
     }
 
     const handleRequestCancelled = () => {
-      setRequestsRefresh(t => t + 1)
+      queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
+      queryClient.invalidateQueries({ queryKey: ['friendRequests'] })
     }
 
-    const handleNewMessage = () => {
-      setChatsRefreshTrigger(t => t + 1)
+    const handleNewMessage = (data) => {
+      if (viewRef.current === 'chats' && activeChat?.id === data?.chatId) return
+      queryClient.invalidateQueries({ queryKey: ['chats'] })
+      queryClient.invalidateQueries({ queryKey: ['chatsUnread'] })
     }
 
     const handleChatCreated = () => {
-      setChatsRefreshTrigger(t => t + 1)
+      queryClient.invalidateQueries({ queryKey: ['chats'] })
     }
 
     const handleNotification = () => {
-      fetchNotificationCount()
+      queryClient.invalidateQueries({ queryKey: ['notificationsUnread'] })
     }
 
     const handleNotificationsCleared = () => {
-      fetchNotificationCount()
+      queryClient.invalidateQueries({ queryKey: ['notificationsUnread'] })
+    }
+
+    const handleMessagesRead = (data) => {
+      if (viewRef.current === 'chats' && activeChat?.id === data?.chatId) return
+      queryClient.invalidateQueries({ queryKey: ['chats'] })
+      queryClient.invalidateQueries({ queryKey: ['chatsUnread'] })
+    }
+
+    const handleReconnect = () => {
+      queryClient.invalidateQueries({ queryKey: ['chats'] })
+      queryClient.invalidateQueries({ queryKey: ['chatsUnread'] })
+      if (activeChat) {
+        queryClient.invalidateQueries({ queryKey: ['messages', activeChat.id] })
+      }
     }
 
     socket.on('friend_request_received', handleRequestReceived)
@@ -146,6 +160,8 @@ export default function Home() {
     socket.on('chat_created', handleChatCreated)
     socket.on('notification', handleNotification)
     socket.on('notifications_cleared', handleNotificationsCleared)
+    socket.on('messages_read', handleMessagesRead)
+    socket.on('connect', handleReconnect)
 
     return () => {
       socket.off('friend_request_received', handleRequestReceived)
@@ -155,49 +171,40 @@ export default function Home() {
       socket.off('chat_created', handleChatCreated)
       socket.off('notification', handleNotification)
       socket.off('notifications_cleared', handleNotificationsCleared)
+      socket.off('messages_read', handleMessagesRead)
+      socket.off('connect', handleReconnect)
     }
-  }, [profile])
+  }, [profile, activeChat])
 
-  useEffect(() => {
-    if (!profile) return
-    api('/api/chats/unread/total')
-      .then(res => res.json())
-      .then(data => {
-        if (data.total !== undefined) {
-          setUnreadMessagesCount(data.total)
-        }
-      })
-      .catch((err) => { console.error(err) })
-  }, [profile, chatsRefreshTrigger])
+  const { data: unreadTotal } = useQuery({
+    queryKey: ['chatsUnread'],
+    queryFn: async () => {
+      const res = await api('/api/chats/unread/total')
+      const data = await res.json()
+      return data.total ?? 0
+    },
+    enabled: !!profile,
+  })
 
-  const fetchNotificationCount = useCallback(async () => {
-    try {
+  const { data: notificationsCount } = useQuery({
+    queryKey: ['notificationsUnread'],
+    queryFn: async () => {
       const res = await api('/api/notifications/unread/count')
       const data = await res.json()
-      if (data.count !== undefined) {
-        setNotificationsCount(data.count)
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }, [])
+      return data.count ?? 0
+    },
+    enabled: !!profile,
+  })
 
-  useEffect(() => {
-    if (!profile) return
-    api('/api/friends/requests/count')
-      .then(res => res.json())
-      .then(data => {
-        if (data.count !== undefined) {
-          setPendingRequestsCount(data.count)
-        }
-      })
-      .catch((err) => { console.error(err) })
-  }, [profile, requestsRefresh])
-
-  useEffect(() => {
-    if (!profile) return
-    fetchNotificationCount()
-  }, [profile, fetchNotificationCount])
+  const { data: pendingRequestsCount } = useQuery({
+    queryKey: ['pendingRequestsCount'],
+    queryFn: async () => {
+      const res = await api('/api/friends/requests/count')
+      const data = await res.json()
+      return data.count ?? 0
+    },
+    enabled: !!profile,
+  })
 
   useEffect(() => {
     if (!profile) return
@@ -239,39 +246,33 @@ export default function Home() {
 
   const handleBackFromConversation = () => {
     setActiveChat(null)
-    setChatsRefreshTrigger(t => t + 1)
   }
 
   const handleBackFromNewChat = () => {
     setChatsView('list')
   }
 
-  const fetchMyPost = useCallback(async () => {
-    try {
+  const { data: myPost } = useQuery({
+    queryKey: ['myPost'],
+    queryFn: async () => {
       const res = await api('/api/posts/mine')
       const data = await res.json()
-      if (data.post) {
-        setMyPost(data.post)
-        setPostContent(data.post.content)
-        setPostLikes(data.post.post_likes?.[0]?.count ?? 0)
-      } else {
-        setMyPost(null)
-        setPostContent('')
-        setPostLikes(0)
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }, [])
+      return data.post || null
+    },
+    enabled: !!profile,
+  })
+
+  const postLikes = myPost?.post_likes?.[0]?.count ?? 0
 
   useEffect(() => {
-    if (!profile) return
-    fetchMyPost()
-  }, [profile, fetchMyPost])
+    if (myPost !== undefined && !editing) {
+      setPostContent(myPost?.content ?? '')
+    }
+  }, [myPost, editing])
 
   const handlePublish = async () => {
     if (!postContent.trim() || publishing) return
-    if (editing && postContent.trim() === myPost.content) return
+    if (editing && postContent.trim() === myPost?.content) return
     setPublishing(true)
     try {
       const res = await api('/api/posts', {
@@ -281,9 +282,9 @@ export default function Home() {
       })
       const data = await res.json()
       if (data.post) {
-        setMyPost(data.post)
-        setPostLikes(0)
         setEditing(false)
+        queryClient.invalidateQueries({ queryKey: ['myPost'] })
+        queryClient.invalidateQueries({ queryKey: ['feed'] })
       }
     } catch (err) {
       console.error(err)
@@ -307,10 +308,9 @@ export default function Home() {
       const res = await api('/api/posts', { method: 'DELETE' })
       const data = await res.json()
       if (data.deleted) {
-        setMyPost(null)
-        setPostContent('')
-        setPostLikes(0)
         setEditing(false)
+        queryClient.invalidateQueries({ queryKey: ['myPost'] })
+        queryClient.invalidateQueries({ queryKey: ['feed'] })
       }
     } catch (err) {
       console.error(err)
@@ -356,6 +356,7 @@ export default function Home() {
       if (res.ok && data.chat) {
         setActiveChat(data.chat)
         setChatsView('list')
+        queryClient.invalidateQueries({ queryKey: ['chats'] })
       }
     } catch (err) { console.error(err) }
   }
@@ -611,13 +612,13 @@ export default function Home() {
                 </div>
               </div>
             ) : view === 'notifications' ? (
-              <NotificationsPanel onNotificationCount={setNotificationsCount} />
+              <NotificationsPanel />
             ) : view === 'chats' ? (
               <>
                 {chatsView === 'new' ? (
                   <NewChat onSelectFriend={handleSelectFriend} onBack={handleBackFromNewChat} />
                 ) : activeChat ? (
-                  <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} onChatRead={() => setChatsRefreshTrigger(t => t + 1)} />
+                  <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} />
                 ) : (
                   <section className="flex-1 flex flex-col min-h-0">
                     <div className="flex items-center justify-between mb-4">
@@ -632,7 +633,6 @@ export default function Home() {
                     </div>
                     <ChatsList
                       onSelectChat={handleSelectChat}
-                      refreshTrigger={chatsRefreshTrigger}
                     />
                   </section>
                 )}
@@ -641,22 +641,22 @@ export default function Home() {
               <>
                 {tab === 'add' && (
                   <section className="flex-1 flex flex-col">
-                    <FriendSearch onRequestSent={() => setPendingRefresh(t => t + 1)} />
+                    <FriendSearch />
                     <div className="mt-8">
-                      <PendingRequests refreshTrigger={pendingRefresh} />
+                      <PendingRequests />
                     </div>
                   </section>
                 )}
 
                 {tab === 'requests' && (
                   <section className="flex-1 flex flex-col">
-                    <FriendRequests refreshTrigger={requestsRefresh} onRespond={() => { setRequestsRefresh(t => t + 1); setFriendsRefresh(t => t + 1) }} />
+                    <FriendRequests />
                   </section>
                 )}
 
                 {tab === 'friends' && (
                   <section className="flex-1 flex flex-col">
-                    <FriendsList refreshTrigger={friendsRefresh} onUpdate={() => setFriendsRefresh(t => t + 1)} />
+                    <FriendsList />
                   </section>
                 )}
               </>
@@ -734,7 +734,7 @@ export default function Home() {
               className={`relative transition ${view === 'chats' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
             >
               <Send size={24} />
-              {unreadMessagesCount > 0 && (
+              {unreadTotal > 0 && (
                 <span
                   className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
                   style={{
@@ -745,7 +745,7 @@ export default function Home() {
                     padding: '0 5px',
                   }}
                 >
-                  {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                  {unreadTotal > 99 ? '99+' : unreadTotal}
                 </span>
               )}
             </button>

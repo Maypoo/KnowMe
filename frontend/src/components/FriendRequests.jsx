@@ -1,53 +1,73 @@
-import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import Avatar from './Avatar'
+import { SkeletonBox, SkeletonAvatar } from './Skeleton'
 
-export default function FriendRequests({ refreshTrigger, onRespond }) {
+export default function FriendRequests() {
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [requests, setRequests] = useState([])
-  const [loading, setLoading] = useState(true)
 
-  const fetchRequests = useCallback(async () => {
-    try {
+  const { data: requests = [], isLoading } = useQuery({
+    queryKey: ['friendRequests'],
+    queryFn: async () => {
       const res = await api('/api/friends/requests')
       const data = await res.json()
-      if (res.ok) {
-        setRequests(data.requests)
+      return data.requests || []
+    },
+  })
+
+  const respondMutation = useMutation({
+    mutationFn: async ({ requestId, action }) => {
+      const res = await api('/api/friends/respond', {
+        method: 'POST',
+        body: JSON.stringify({ requestId, action }),
+      })
+      if (!res.ok) throw new Error('Error al responder')
+    },
+    onMutate: async ({ requestId }) => {
+      await queryClient.cancelQueries({ queryKey: ['friendRequests'] })
+      const prev = queryClient.getQueryData(['friendRequests'])
+      queryClient.setQueryData(['friendRequests'], (old) =>
+        (old || []).filter(r => r.id !== requestId)
+      )
+      return { prev }
+    },
+    onError: (_, __, context) => {
+      if (context?.prev) {
+        queryClient.setQueryData(['friendRequests'], context.prev)
       }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['friendRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['friends'] })
+      queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
+    },
+  })
 
-  useEffect(() => {
-    fetchRequests()
-  }, [fetchRequests, refreshTrigger])
-
-  const handleRespond = async (requestId, action) => {
-    const prev = requests.find(r => r.id === requestId)
-    setRequests(prev => prev.filter(r => r.id !== requestId))
-
-    const res = await api('/api/friends/respond', {
-      method: 'POST',
-      body: JSON.stringify({ requestId, action }),
-    })
-
-    if (res.ok) {
-      onRespond?.()
-    } else {
-      if (prev) setRequests(p => [...p, prev])
-    }
+  const handleRespond = (requestId, action) => {
+    respondMutation.mutate({ requestId, action })
   }
-
-  if (loading) return null
 
   return (
     <div className="flex-1 flex flex-col">
       <h2 className="text-center text-zinc-300 text-lg font-semibold mb-6">Solicitudes de amistad</h2>
-      {requests.length === 0 ? (
+      {isLoading ? (
+        <ul className="space-y-3">
+          {[1,2,3,4].map(i => (
+            <li key={i} className="flex items-center justify-between bg-zinc-900 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-3">
+                <SkeletonAvatar size={32} />
+                <SkeletonBox className="h-4 w-24" />
+              </div>
+              <div className="flex gap-2">
+                <SkeletonBox className="h-7 w-16 rounded-lg" />
+                <SkeletonBox className="h-7 w-16 rounded-lg" />
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : requests.length === 0 ? (
           <div className="flex-1 flex items-center justify-center">
             <p className="text-zinc-600 text-sm text-center">No hay nadie por aca.</p>
           </div>

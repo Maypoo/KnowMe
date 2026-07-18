@@ -1,62 +1,54 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
+import { SkeletonBox, SkeletonAvatar } from './Skeleton'
 
-export default function NotificationsPanel({ onNotificationCount }) {
+export default function NotificationsPanel() {
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [notifications, setNotifications] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [following, setFollowing] = useState(new Set())
 
-  const fetchNotifications = useCallback(async () => {
-    try {
+  const { data: notifications = [], isLoading } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
       const res = await api('/api/notifications')
       const data = await res.json()
-      if (res.ok) {
-        setNotifications(data.notifications)
-        const ids = new Set()
-        for (const n of data.notifications) {
-          if (n.isFollowingBack) ids.add(n.fromUser.id)
-        }
-        setFollowing(ids)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+      return data.notifications || []
+    },
+  })
 
-  useEffect(() => {
-    fetchNotifications()
-  }, [fetchNotifications])
+  const following = useMemo(() => {
+    const ids = new Set()
+    for (const n of notifications) {
+      if (n.isFollowingBack) ids.add(n.fromUser.id)
+    }
+    return ids
+  }, [notifications])
 
   useEffect(() => {
     api('/api/notifications/read', { method: 'POST' }).catch(console.error)
-    onNotificationCount?.(0)
-  }, [onNotificationCount])
+    queryClient.invalidateQueries({ queryKey: ['notificationsUnread'] })
+  }, [queryClient])
 
   useEffect(() => {
     const handleNotification = (data) => {
-      setNotifications(prev => {
-        const idx = prev.findIndex(n => n.id === data.notification.id)
+      queryClient.setQueryData(['notifications'], (old) => {
+        if (!old) return [data.notification]
+        const idx = old.findIndex(n => n.id === data.notification.id)
         if (idx !== -1) {
-          const next = [...prev]
+          const next = [...old]
           next[idx] = data.notification
           next.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
           return next
         }
-        return [data.notification, ...prev]
+        return [data.notification, ...old]
       })
-      if (data.notification.isFollowingBack) {
-        setFollowing(prev => new Set(prev).add(data.notification.fromUser.id))
-      }
     }
 
     const handleNotificationsCleared = () => {
-      setNotifications([])
+      queryClient.setQueryData(['notifications'], [])
     }
 
     socket.on('notification', handleNotification)
@@ -66,16 +58,17 @@ export default function NotificationsPanel({ onNotificationCount }) {
       socket.off('notification', handleNotification)
       socket.off('notifications_cleared', handleNotificationsCleared)
     }
-  }, [])
+  }, [queryClient])
 
   const handleFollowBack = async (username, userId) => {
     try {
       const res = await api(`/api/follow/${encodeURIComponent(username)}`, { method: 'POST' })
       if (res.ok) {
-        setFollowing(prev => new Set(prev).add(userId))
-        setNotifications(prev => prev.map(n =>
-          n.fromUser.id === userId ? { ...n, isFollowingBack: true } : n
-        ))
+        queryClient.setQueryData(['notifications'], (old) =>
+          (old || []).map(n =>
+            n.fromUser.id === userId ? { ...n, isFollowingBack: true } : n
+          )
+        )
       }
     } catch (err) {
       console.error(err)
@@ -86,14 +79,11 @@ export default function NotificationsPanel({ onNotificationCount }) {
     try {
       const res = await api(`/api/follow/${encodeURIComponent(username)}`, { method: 'DELETE' })
       if (res.ok) {
-        setFollowing(prev => {
-          const next = new Set(prev)
-          next.delete(userId)
-          return next
-        })
-        setNotifications(prev => prev.map(n =>
-          n.fromUser.id === userId ? { ...n, isFollowingBack: false } : n
-        ))
+        queryClient.setQueryData(['notifications'], (old) =>
+          (old || []).map(n =>
+            n.fromUser.id === userId ? { ...n, isFollowingBack: false } : n
+          )
+        )
       }
     } catch (err) {
       console.error(err)
@@ -108,6 +98,7 @@ export default function NotificationsPanel({ onNotificationCount }) {
       })
       const data = await res.json()
       if (res.ok && data.chat) {
+        queryClient.invalidateQueries({ queryKey: ['chats'] })
         const chat = data.chat
         const state = JSON.parse(localStorage.getItem('knowme_home_state') || '{}')
         state.activeChat = chat
@@ -125,14 +116,34 @@ export default function NotificationsPanel({ onNotificationCount }) {
     try {
       const res = await api('/api/notifications', { method: 'DELETE' })
       if (res.ok) {
-        setNotifications([])
+        queryClient.setQueryData(['notifications'], [])
+        queryClient.invalidateQueries({ queryKey: ['notificationsUnread'] })
       }
     } catch (err) {
       console.error(err)
     }
   }
 
-  if (loading) return null
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex flex-col">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-zinc-300 text-lg font-semibold">Notificaciones</h2>
+        </div>
+        <ul className="space-y-1">
+          {[1,2,3,4,5].map(i => (
+            <li key={i} className="flex items-center justify-between bg-zinc-900 rounded-lg px-3 py-3">
+              <div className="flex items-center gap-3">
+                <SkeletonAvatar size={32} />
+                <SkeletonBox className="h-4 w-48" />
+              </div>
+              <SkeletonBox className="h-6 w-24 rounded-lg" />
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 flex flex-col">

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Camera } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { api } from '../lib/api'
@@ -8,9 +9,8 @@ import DatePicker from '../components/DatePicker'
 import CountrySelect from '../components/CountrySelect'
 
 export default function EditProfile() {
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [updatingAvatar, setUpdatingAvatar] = useState(false)
   const [updatingUsername, setUpdatingUsername] = useState(false)
   const [updatingDisplayName, setUpdatingDisplayName] = useState(false)
@@ -31,27 +31,37 @@ export default function EditProfile() {
   const checkTimerRef = useRef(null)
   const fileInputRef = useRef(null)
 
+  const { data: profileData, isLoading } = useQuery({
+    queryKey: ['editProfile'],
+    queryFn: async () => {
+      const res = await api('/api/auth/me')
+      if (!res.ok) throw new Error('No autenticado')
+      const data = await res.json()
+      if (!data.profile) throw new Error('Perfil no encontrado')
+      return data
+    },
+  })
+
+  const profile = profileData?.profile ?? null
+
   useEffect(() => {
-    api('/api/auth/me')
-      .then(res => {
-        if (!res.ok) throw new Error('No autenticado')
-        return res.json()
-      })
-      .then(data => {
-        if (!data.profile) throw new Error('Perfil no encontrado')
-        setProfile(data.profile)
-        setDisplayNameInput(data.profile.username.replace(/^@/, ''))
-        setUsernameInput(data.profile.username.replace(/^@/, ''))
-        setBio(data.profile.bio || '')
-        setBirthDate(data.profile.birth_date || '')
-        setShowAge(data.profile.show_age || false)
-        setCountry(data.profile.country || null)
-        setShowCountry(data.profile.show_country || false)
-        setUsernameLimits(data.limits || null)
-      })
-      .catch((err) => { console.error(err); navigate('/login') })
-      .finally(() => setLoading(false))
-  }, [navigate])
+    if (profileData) {
+      setDisplayNameInput(profileData.profile.username.replace(/^@/, ''))
+      setUsernameInput(profileData.profile.username.replace(/^@/, ''))
+      setBio(profileData.profile.bio || '')
+      setBirthDate(profileData.profile.birth_date || '')
+      setShowAge(profileData.profile.show_age || false)
+      setCountry(profileData.profile.country || null)
+      setShowCountry(profileData.profile.show_country || false)
+      setUsernameLimits(profileData.limits || null)
+    }
+  }, [profileData])
+
+  useEffect(() => {
+    if (profile === null && !isLoading) {
+      navigate('/login')
+    }
+  }, [profile, isLoading, navigate])
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0]
@@ -78,7 +88,7 @@ export default function EditProfile() {
         if (!res.ok) {
           setError(data.error)
         } else {
-          setProfile(data.profile)
+          queryClient.invalidateQueries({ queryKey: ['editProfile'] })
         }
       } catch (err) {
         console.error(err)
@@ -105,7 +115,7 @@ export default function EditProfile() {
       if (!res.ok) {
         setError(data.error)
       } else {
-        setProfile(data.profile)
+        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
         setDisplayNameInput(data.profile.username.replace(/^@/, ''))
       }
     } catch (err) {
@@ -164,7 +174,7 @@ export default function EditProfile() {
         setError(data.error)
         if (data.limits) setUsernameLimits(data.limits)
       } else {
-        setProfile(data.profile)
+        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
         setDisplayNameInput(data.profile.username.replace(/^@/, ''))
         setUsernameInput(data.profile.username.replace(/^@/, ''))
         setUsernameAvailable(null)
@@ -194,7 +204,7 @@ export default function EditProfile() {
       if (!res.ok) {
         setError(data.error)
       } else {
-        setProfile(data.profile)
+        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
         setBio(data.profile.bio || '')
       }
     } catch (err) {
@@ -224,7 +234,7 @@ export default function EditProfile() {
       if (!res.ok) {
         setError(data.error)
       } else {
-        setProfile(data.profile)
+        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
         setBirthDate(data.profile.birth_date || '')
         setShowAge(data.profile.show_age || false)
       }
@@ -254,7 +264,7 @@ export default function EditProfile() {
       if (!res.ok) {
         setError(data.error)
       } else {
-        setProfile(data.profile)
+        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
         setCountry(data.profile.country || null)
         setShowCountry(data.profile.show_country || false)
       }
@@ -282,7 +292,7 @@ export default function EditProfile() {
   const hasUnsavedName = ('@' + displayNameInput) !== profile?.username
   const hasUnsavedBio = bio.trim() !== (profile?.bio || '')
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
         <p className="text-zinc-400">Cargando...</p>

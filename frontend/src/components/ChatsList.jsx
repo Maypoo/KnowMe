@@ -1,48 +1,40 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { socket } from '../lib/socket'
 import Avatar from './Avatar'
+import { SkeletonBox, SkeletonAvatar } from './Skeleton'
 
-export default function ChatsList({ onSelectChat, refreshTrigger }) {
-  const [chats, setChats] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  const fetchChats = useCallback(async () => {
-    try {
+export default function ChatsList({ onSelectChat }) {
+  const { data: chats = [], isLoading } = useQuery({
+    queryKey: ['chats'],
+    queryFn: async () => {
       const res = await api('/api/chats')
       const data = await res.json()
-      if (res.ok) {
-        setChats(data.chats)
-      }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+      return data.chats || []
+    },
+  })
 
-  useEffect(() => {
-    fetchChats()
-  }, [fetchChats, refreshTrigger])
-
-  useEffect(() => {
-    const handleNewMessage = () => {
-      fetchChats()
-    }
-    const handleChatCreated = () => {
-      fetchChats()
-    }
-
-    socket.on('new_message', handleNewMessage)
-    socket.on('chat_created', handleChatCreated)
-
-    return () => {
-      socket.off('new_message', handleNewMessage)
-      socket.off('chat_created', handleChatCreated)
-    }
-  }, [fetchChats])
-
-  if (loading) return null
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex flex-col">
+        <ul className="space-y-1">
+          {[1,2,3,4,5].map(i => (
+            <li key={i}>
+              <div className="w-full rounded-lg px-4 py-3 flex items-center gap-3 bg-zinc-900">
+                <SkeletonAvatar size={40} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <SkeletonBox className="h-4 w-24" />
+                    <SkeletonBox className="h-3 w-12" />
+                  </div>
+                  <SkeletonBox className="h-3 w-40" />
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
 
   return (
     <div className="flex-1 flex flex-col">

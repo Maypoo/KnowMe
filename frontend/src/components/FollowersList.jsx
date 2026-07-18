@@ -1,27 +1,21 @@
-import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import Avatar from './Avatar'
 
 export default function FollowersList({ username, onClose }) {
   const navigate = useNavigate()
-  const [followers, setFollowers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    setLoading(true)
-    setError(null)
-    api(`/api/followers/${encodeURIComponent(username)}`)
-      .then(async res => {
-        if (!res.ok) throw new Error('Error al cargar seguidores')
-        const data = await res.json()
-        setFollowers(data.followers)
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [username])
+  const { data: followers = [], isLoading: loading, error } = useQuery({
+    queryKey: ['followers', username],
+    queryFn: async () => {
+      const res = await api(`/api/followers/${encodeURIComponent(username)}`)
+      if (!res.ok) throw new Error('Error al cargar seguidores')
+      const data = await res.json()
+      return data.followers || []
+    },
+  })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">

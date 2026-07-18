@@ -1,27 +1,21 @@
-import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import Avatar from './Avatar'
 
 export default function FriendsListModal({ username, onClose }) {
   const navigate = useNavigate()
-  const [friends, setFriends] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    setLoading(true)
-    setError(null)
-    api(`/api/friends/${encodeURIComponent(username)}`)
-      .then(async res => {
-        if (!res.ok) throw new Error('Error al cargar amigos')
-        const data = await res.json()
-        setFriends(data.friends)
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
-  }, [username])
+  const { data: friends = [], isLoading: loading, error } = useQuery({
+    queryKey: ['friendsModal', username],
+    queryFn: async () => {
+      const res = await api(`/api/friends/${encodeURIComponent(username)}`)
+      if (!res.ok) throw new Error('Error al cargar amigos')
+      const data = await res.json()
+      return data.friends || []
+    },
+  })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">

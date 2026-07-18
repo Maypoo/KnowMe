@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Send } from 'lucide-react'
 import { api } from '../lib/api'
 import Avatar from '../components/Avatar'
+import { SkeletonBox, SkeletonAvatar } from '../components/Skeleton'
 import countries from '../data/countries'
 import FollowersList from '../components/FollowersList'
 import FriendsListModal from '../components/FriendsListModal'
 
 export default function PublicProfile() {
+  const queryClient = useQueryClient()
   const { username } = useParams()
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
@@ -72,6 +75,7 @@ export default function PublicProfile() {
       })
       const data = await res.json()
       if (res.ok && data.chat) {
+        queryClient.invalidateQueries({ queryKey: ['chats'] })
         sessionStorage.setItem('chatReturn', JSON.stringify({ activeChat: data.chat }))
         navigate('/')
       }
@@ -98,8 +102,27 @@ export default function PublicProfile() {
 
   if (loading || currentUserLoading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
-        <p className="text-zinc-400">Cargando...</p>
+      <div className="min-h-screen bg-zinc-950 text-zinc-100">
+        <div className="max-w-lg mx-auto px-4 py-8">
+          <SkeletonBox className="h-4 w-16 mb-8" />
+          <div className="flex flex-col items-center gap-4">
+            <SkeletonAvatar size={96} className="ring-2 ring-zinc-800" />
+            <div className="text-center flex flex-col items-center gap-2">
+              <SkeletonBox className="h-6 w-36" />
+              <SkeletonBox className="h-4 w-56" />
+              <SkeletonBox className="h-4 w-48" />
+              <div className="flex items-center gap-4 mt-1">
+                <SkeletonBox className="h-4 w-24" />
+                <SkeletonBox className="h-4 w-4" />
+                <SkeletonBox className="h-4 w-20" />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-2">
+              <SkeletonBox className="h-10 w-28 rounded-lg" />
+              <SkeletonBox className="h-10 w-36 rounded-lg" />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 
-export default function FriendSearch({ onRequestSent }) {
+export default function FriendSearch() {
+  const queryClient = useQueryClient()
   const [username, setUsername] = useState('')
   const [status, setStatus] = useState(null)
 
@@ -34,7 +36,8 @@ export default function FriendSearch({ onRequestSent }) {
 
       setStatus({ type: 'success', message: 'Solicitud enviada' })
       setUsername('')
-      onRequestSent?.()
+      queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
     } catch (err) {
       console.error(err)
       setStatus({ type: 'error', message: 'Error de conexión' })
