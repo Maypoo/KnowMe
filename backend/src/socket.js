@@ -115,6 +115,14 @@ export function setupSocket(server) {
       } catch (err) { console.error(err) }
     })
 
+    socket.on('call:mute', (data) => {
+      try {
+        const { targetUserId, muted } = data
+        if (!targetUserId) return
+        io.to(targetUserId).emit('call:mute', { userId: socket.user.id, muted })
+      } catch (err) { console.error(err) }
+    })
+
     socket.on('call:end', (data) => {
       try {
         const { targetUserId } = data

@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useEffect, useState, useRef, useCallback } from 'react'
-import { Phone, PhoneOff, X } from 'lucide-react'
+import { Mic, MicOff, Phone, PhoneOff, X } from 'lucide-react'
 import { socket } from '../lib/socket'
 import { api } from '../lib/api'
 import { createPeerConnection } from '../lib/webrtc'
@@ -11,6 +11,8 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
   const [error, setError] = useState('')
   const [duration, setDuration] = useState(0)
   const [finalDuration, setFinalDuration] = useState(0)
+  const [isMuted, setIsMuted] = useState(false)
+  const [remoteMuted, setRemoteMuted] = useState(false)
 
   const callStateRef = useRef('idle')
   const otherUserRef = useRef(null)
@@ -71,6 +73,8 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = null
     }
+    setRemoteMuted(false)
+    setIsMuted(false)
   }, [])
 
   const showError = useCallback((msg) => {
@@ -87,6 +91,18 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
       setError('')
     }, 2000)
   }, [cleanup])
+
+  const toggleMute = useCallback(() => {
+    const audioTracks = localStreamRef.current?.getAudioTracks()
+    if (audioTracks && audioTracks.length > 0) {
+      const nextEnabled = !audioTracks[0].enabled
+      audioTracks.forEach(track => { track.enabled = nextEnabled })
+      setIsMuted(!nextEnabled)
+      if (otherUserRef.current) {
+        socket.emit('call:mute', { targetUserId: otherUserRef.current.id, muted: !nextEnabled })
+      }
+    }
+  }, [])
 
   const endCall = useCallback(() => {
     stopTimer()
@@ -289,6 +305,10 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
       }
     }
 
+    const handleRemoteMute = (data) => {
+      setRemoteMuted(data.muted)
+    }
+
     socket.on('signal:offer', handleOffer)
     socket.on('signal:answer', handleAnswer)
     socket.on('signal:ice-candidate', handleIceCandidate)
@@ -297,6 +317,7 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
     socket.on('call:unreachable', handleUnreachable)
     socket.on('call:ack', handleAck)
     socket.on('call:debug', handleDebug)
+    socket.on('call:mute', handleRemoteMute)
 
     return () => {
       socket.off('signal:offer', handleOffer)
@@ -307,6 +328,7 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
       socket.off('call:unreachable', handleUnreachable)
       socket.off('call:ack', handleAck)
       socket.off('call:debug', handleDebug)
+      socket.off('call:mute', handleRemoteMute)
       cleanup()
     }
     }, [cleanup, endCall, syncRemoteAudio, showError])
@@ -413,6 +435,13 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
 
           <p className="text-zinc-100 text-lg font-medium">{otherUser?.username}</p>
 
+          {remoteMuted && (
+            <div className="flex items-center gap-1.5 text-zinc-400 text-xs -mt-3">
+              <MicOff size={14} />
+              <span>Silenciado</span>
+            </div>
+          )}
+
           {error && callState !== 'ended' && (
             <p className="text-red-400 text-sm text-center">{error}</p>
           )}
@@ -456,12 +485,24 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
                 <p className="text-green-400 text-sm font-medium">En llamada</p>
               </div>
               <p className="text-zinc-300 text-lg font-mono tabular-nums">{formatDuration(duration)}</p>
-              <button
-                onClick={endCall}
-                className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
-              >
-                <PhoneOff size={24} />
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={toggleMute}
+                  className={`rounded-full p-4 transition ${
+                    isMuted
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
+                  }`}
+                >
+                  {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
+                </button>
+                <button
+                  onClick={endCall}
+                  className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
+                >
+                  <PhoneOff size={24} />
+                </button>
+              </div>
             </>
           )}
 

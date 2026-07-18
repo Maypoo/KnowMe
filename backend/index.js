@@ -2275,6 +2275,49 @@ app.post('/api/posts/:id/like', auth, asyncHandler(async (req, res) => {
       .insert({ post_id: post.id, user_id: req.user.id })
     if (error && error.code !== '23505') {
       console.error('Error al dar like:', error)
+      return
+    }
+
+    const { data: existingNotif } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('user_id', post.user_id)
+      .eq('from_user_id', req.user.id)
+      .eq('type', 'like')
+      .maybeSingle()
+
+    if (!existingNotif) {
+      const { data: inserted } = await supabase
+        .from('notifications')
+        .insert({ user_id: post.user_id, from_user_id: req.user.id, type: 'like' })
+        .select()
+        .single()
+
+      if (inserted) {
+        const { data: fromProfile } = await supabase
+          .from('profiles')
+          .select('username, display_name, avatar_url')
+          .eq('id', req.user.id)
+          .maybeSingle()
+
+        const io = getIO()
+        if (io) {
+          io.to(post.user_id).emit('notification', {
+            notification: {
+              id: inserted.id,
+              type: 'like',
+              read: false,
+              createdAt: inserted.created_at,
+              isFollowingBack: false,
+              fromUser: {
+                id: req.user.id,
+                username: sanitize(fromProfile?.display_name || fromProfile?.username || 'Desconocido'),
+                avatar_url: fromProfile?.avatar_url || null,
+              },
+            },
+          })
+        }
+      }
     }
   }, 2000)
 

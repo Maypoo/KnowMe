@@ -179,6 +179,7 @@ export default function NotificationsPanel() {
                   {notif.type === 'friend_reject' && ' rechazó tu solicitud'}
                   {notif.type === 'unfollow' && ' dejó de seguirte'}
                   {notif.type === 'unfriend' && ' rompió su amistad'}
+                  {notif.type === 'like' && ' le dió like a tu publicación'}
                 </span>
               </div>
               {notif.type === 'follow' && !following.has(notif.fromUser.id) && (

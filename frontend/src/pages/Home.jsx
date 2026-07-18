@@ -265,6 +265,12 @@ export default function Home() {
   const postLikes = myPost?.post_likes?.[0]?.count ?? 0
 
   useEffect(() => {
+    if (view === 'plus') {
+      queryClient.invalidateQueries({ queryKey: ['myPost'] })
+    }
+  }, [view, queryClient])
+
+  useEffect(() => {
     if (myPost !== undefined && !editing) {
       setPostContent(myPost?.content ?? '')
     }
