@@ -667,7 +667,7 @@ export default function Home() {
 
       {view !== 'search' && (
         <div className="fixed bottom-0 left-0 right-0 flex justify-center pb-4">
-          <div className="bg-zinc-900 rounded-2xl px-8 max-[420px]:px-4 py-3 flex items-center gap-12 max-[420px]:gap-6 shadow-lg">
+          <div className="bg-zinc-900 rounded-2xl px-8 py-3 flex items-center justify-between mx-3 w-full max-w-sm shadow-lg">
             <button
               onClick={() => setView('home')}
               className={`relative transition ${view === 'home' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
