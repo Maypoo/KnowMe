@@ -380,7 +380,7 @@ export default function Home() {
   }
 
   return (
-    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overscroll-none">
       {view === 'search' ? (
         <div className="flex-1 flex flex-col min-h-0 px-6 py-6">
           <div className="flex items-center gap-2 mb-4">

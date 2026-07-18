@@ -136,7 +136,7 @@ export default function Feed() {
   }
 
   return (
-    <div ref={feedRef} className="flex-1 overflow-hidden relative">
+    <div ref={feedRef} className="flex-1 overflow-hidden overscroll-none relative">
       {feedLoading ? (
         <div className="h-full flex flex-col items-center justify-center px-6">
           <div className="flex items-center gap-3 mb-6">
