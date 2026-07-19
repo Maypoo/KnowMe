@@ -529,7 +529,7 @@ app.get('/api/profile/:username', auth, asyncHandler(async (req, res) => {
 app.get('/api/users/search', auth, asyncHandler(async (req, res) => {
   const q = req.query.q
 
-  if (!q || q.length < 2) {
+  if (!q || q.length < 1) {
     return res.status(400).json({ error: 'Búsqueda muy corta' })
   }
 

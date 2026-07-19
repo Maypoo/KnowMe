@@ -25,7 +25,6 @@ export default function PublicProfile() {
   const [showFriends, setShowFriends] = useState(false)
 
   const [post, setPost] = useState(null)
-  const [postLoading, setPostLoading] = useState(false)
 
   useEffect(() => {
     api('/api/auth/me')
@@ -44,31 +43,25 @@ export default function PublicProfile() {
     }
     setLoading(true)
     setError(null)
-    api(`/api/profile/${encodeURIComponent(username)}`)
-      .then(async res => {
-        if (!res.ok) {
-          if (res.status === 404) throw new Error('Usuario no encontrado')
+    Promise.all([
+      api(`/api/profile/${encodeURIComponent(username)}`),
+      api(`/api/posts/user/${encodeURIComponent(username)}`).catch(() => null),
+    ])
+      .then(async ([profileRes, postRes]) => {
+        if (!profileRes.ok) {
+          if (profileRes.status === 404) throw new Error('Usuario no encontrado')
           throw new Error('Error al cargar perfil')
         }
-        const data = await res.json()
-        setProfile(data.profile)
+        const profileData = await profileRes.json()
+        setProfile(profileData.profile)
+        if (postRes?.ok) {
+          const postData = await postRes.json()
+          setPost(postData.post)
+        }
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [username])
-
-  useEffect(() => {
-    if (!profile || error) return
-    setPostLoading(true)
-    api(`/api/posts/user/${encodeURIComponent(username)}`)
-      .then(async res => {
-        if (!res.ok) return
-        const data = await res.json()
-        setPost(data.post)
-      })
-      .catch(() => {})
-      .finally(() => setPostLoading(false))
-  }, [profile?.id, username])
 
   const handlePostLike = (postId) => {
     if (!post) return
