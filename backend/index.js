@@ -2366,6 +2366,69 @@ app.post('/api/posts/:id/unlike', auth, asyncHandler(async (req, res) => {
   res.json({ unliked: true, likesCount: count })
 }))
 
+app.get('/api/posts/user/:username', auth, asyncHandler(async (req, res) => {
+  const { username } = req.params
+  const sanitized = sanitize(username)
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .ilike('username', escapeILike(sanitized.toLowerCase()))
+    .maybeSingle()
+
+  if (!profile) {
+    return res.status(404).json({ error: 'Usuario no encontrado' })
+  }
+
+  const { data: post, error } = await supabase
+    .from('posts')
+    .select('*, post_likes(count)')
+    .eq('user_id', profile.id)
+    .maybeSingle()
+
+  if (error) return res.status(500).json({ error: 'Error al obtener post' })
+
+  if (!post) {
+    return res.json({ post: null })
+  }
+
+  const likesCount = post.post_likes?.[0]?.count ?? 0
+
+  let likedByMe = false
+  let friendRequestStatus = null
+
+  if (req.user.id !== profile.id) {
+    const { count: likeCount } = await supabase
+      .from('post_likes')
+      .select('*', { count: 'exact', head: true })
+      .eq('post_id', post.id)
+      .eq('user_id', req.user.id)
+
+    likedByMe = (likeCount || 0) > 0
+
+    const { data: friendReq } = await supabase
+      .from('friend_requests')
+      .select('status')
+      .or(`and(sender_id.eq.${req.user.id},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${req.user.id})`)
+      .maybeSingle()
+
+    friendRequestStatus = friendReq?.status || null
+  }
+
+  res.json({
+    post: {
+      id: post.id,
+      content: post.content,
+      created_at: post.created_at,
+      updated_at: post.updated_at,
+      user_id: post.user_id,
+      likes_count: likesCount,
+      liked_by_me: likedByMe,
+      friend_request_status: friendRequestStatus,
+    },
+  })
+}))
+
 app.get('/api/posts/:id', auth, asyncHandler(async (req, res) => {
   const { data: post, error } = await supabase
     .from('posts')

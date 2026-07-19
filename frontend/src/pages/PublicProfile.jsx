@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Send } from 'lucide-react'
+import { ArrowLeft, Heart, Send } from 'lucide-react'
+import NumberFlow from '@number-flow/react'
 import { api } from '../lib/api'
 import Avatar from '../components/Avatar'
 import { SkeletonBox, SkeletonAvatar } from '../components/Skeleton'
@@ -22,6 +23,9 @@ export default function PublicProfile() {
   const [requestLoading, setRequestLoading] = useState(false)
   const [showFollowers, setShowFollowers] = useState(false)
   const [showFriends, setShowFriends] = useState(false)
+
+  const [post, setPost] = useState(null)
+  const [postLoading, setPostLoading] = useState(false)
 
   useEffect(() => {
     api('/api/auth/me')
@@ -52,6 +56,37 @@ export default function PublicProfile() {
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [username])
+
+  useEffect(() => {
+    if (!profile || error) return
+    setPostLoading(true)
+    api(`/api/posts/user/${encodeURIComponent(username)}`)
+      .then(async res => {
+        if (!res.ok) return
+        const data = await res.json()
+        setPost(data.post)
+      })
+      .catch(() => {})
+      .finally(() => setPostLoading(false))
+  }, [profile?.id, username])
+
+  const handlePostLike = (postId) => {
+    if (!post) return
+    const newLiked = !post.liked_by_me
+    setPost(prev => ({
+      ...prev,
+      liked_by_me: newLiked,
+      likes_count: newLiked ? prev.likes_count + 1 : prev.likes_count - 1,
+    }))
+    const endpoint = newLiked ? `/api/posts/${postId}/like` : `/api/posts/${postId}/unlike`
+    api(endpoint, { method: 'POST' }).catch(() => {
+      setPost(prev => ({
+        ...prev,
+        liked_by_me: !newLiked,
+        likes_count: prev.likes_count + (newLiked ? -1 : 1),
+      }))
+    })
+  }
 
   const handleFollow = () => {
     setProfile(prev => ({ ...prev, is_following: true, follower_count: prev.follower_count + 1 }))
@@ -274,6 +309,36 @@ export default function PublicProfile() {
                 </button>
               )}
             </>
+          )}
+
+          {post && (
+            <div className="w-full max-w-sm mt-6 px-4">
+              <h2 className="text-center text-zinc-300 text-lg font-semibold mb-3">Publicación actual</h2>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+                <p className="text-zinc-100 text-lg leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                {currentUser?.username?.toLowerCase() !== username.toLowerCase() ? (
+                  <button
+                    onClick={() => handlePostLike(post.id)}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl transition hover:opacity-90 active:scale-95"
+                    style={{ backgroundColor: '#6659ff' }}
+                  >
+                    <Heart
+                      size={20}
+                      strokeWidth={2.5}
+                      className={post.liked_by_me ? 'text-white fill-white' : 'text-white'}
+                    />
+                    <span className="text-sm font-medium text-white">{post.likes_count}</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-zinc-400 text-sm">
+                    <Heart size={14} strokeWidth={2} className="text-red-400" fill="#f87171" />
+                    <NumberFlow value={post.likes_count} suffix={` like${post.likes_count !== 1 ? 's' : ''}`} />
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {error && (
