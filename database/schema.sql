@@ -72,6 +72,8 @@ create table followers (
   primary key (follower_id, following_id)
 );
 
+create index idx_followers_following on followers(following_id);
+
 alter table followers enable row level security;
 
 create policy "Followers gestionables solo por service_role"

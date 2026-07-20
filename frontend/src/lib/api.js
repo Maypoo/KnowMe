@@ -1,4 +1,5 @@
 const BASE_URL = import.meta.env.VITE_API_URL || ''
+const AUTH_TOKEN_KEY = 'knowme_auth_token'
 
 function resolveUrl(path) {
   if (!BASE_URL) return path
@@ -9,7 +10,31 @@ function resolveUrl(path) {
   return `${url.toString().replace(/\/$/, '')}${path}`
 }
 
+let authToken = sessionStorage.getItem(AUTH_TOKEN_KEY)
+
+export function setAuthToken(token) {
+  authToken = token
+  if (token) {
+    sessionStorage.setItem(AUTH_TOKEN_KEY, token)
+  } else {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY)
+  }
+}
+
+export function clearAuthToken() {
+  setAuthToken(null)
+}
+
 export async function api(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  }
+
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`
+  }
+
   const MAX_RETRIES = 2
   let lastError
 
@@ -18,10 +43,7 @@ export async function api(path, options = {}) {
       const res = await fetch(resolveUrl(path), {
         credentials: 'include',
         ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
+        headers,
       })
       return res
     } catch (err) {

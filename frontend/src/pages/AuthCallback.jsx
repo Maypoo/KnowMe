@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { api } from '../lib/api'
+import { api, setAuthToken } from '../lib/api'
 
 const SLOW_MS = 20000
 
@@ -27,6 +27,8 @@ export default function AuthCallback() {
 
       if (accessToken && refreshToken) {
         try {
+          setAuthToken(accessToken)
+
           if (isDelete) {
             const res = await api('/api/auth/delete-account', {
               method: 'POST',
@@ -95,6 +97,8 @@ export default function AuthCallback() {
       }
 
       try {
+        setAuthToken(session.access_token)
+
         const res = await api('/api/auth/google', {
           method: 'POST',
           body: JSON.stringify({

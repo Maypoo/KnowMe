@@ -1099,7 +1099,7 @@ app.patch('/api/profile', auth, asyncHandler(async (req, res) => {
   })
 }))
 
-app.get('/api/username/check', auth, asyncHandler(async (req, res) => {
+app.get('/api/username/check', asyncHandler(async (req, res) => {
   const { q } = req.query
 
   if (!q || !/^@(?=.*[a-zA-Z])[a-zA-Z0-9_.]+$/.test(q)) {
@@ -1112,12 +1112,27 @@ app.get('/api/username/check', auth, asyncHandler(async (req, res) => {
 
   const lower = q.toLowerCase()
 
-  const { data: existing } = await supabase
+  let query = supabase
     .from('profiles')
     .select('username')
     .ilike('username', escapeILike(lower))
-    .neq('id', req.user.id)
-    .maybeSingle()
+
+  let token = req.cookies['sb-access-token']
+  if (!token) {
+    const authHeader = req.headers['authorization']
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7)
+    }
+  }
+
+  if (token) {
+    const { data: { user } } = await supabase.auth.getUser(token)
+    if (user) {
+      query = query.neq('id', user.id)
+    }
+  }
+
+  const { data: existing } = await query.maybeSingle()
 
   if (existing) {
     return res.json({ available: false, error: 'Ese nombre de usuario ya está en uso' })
@@ -1691,7 +1706,7 @@ app.get('/api/chats', auth, asyncHandler(async (req, res) => {
     }
   }))
 
-  res.json({ chats: enriched.filter(c => c.lastMessage !== null) })
+  res.json({ chats: enriched })
 }))
 
 app.post('/api/chats', auth, asyncHandler(async (req, res) => {

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, setAuthToken } from '../lib/api'
 import Avatar from '../components/Avatar'
 
 export default function SetupUsername() {
@@ -127,6 +127,7 @@ export default function SetupUsername() {
         return
       }
 
+      setAuthToken(accessToken)
       navigate('/')
     } catch (err) {
       console.error(err)

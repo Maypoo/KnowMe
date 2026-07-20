@@ -1,7 +1,14 @@
 import { supabase } from '../lib/supabase.js'
 
 export default async function auth(req, res, next) {
-  const token = req.cookies['sb-access-token']
+  let token = req.cookies['sb-access-token']
+
+  if (!token) {
+    const authHeader = req.headers['authorization']
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7)
+    }
+  }
 
   if (!token) {
     return res.status(401).json({ error: 'No autenticado' })

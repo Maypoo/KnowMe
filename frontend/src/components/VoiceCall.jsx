@@ -278,14 +278,6 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
       showError('El usuario está ocupado')
     }
 
-    const handleUnreachable = () => {
-      api('/api/calls/missed', {
-        method: 'POST',
-        body: JSON.stringify({ targetUserId: otherUserRef.current?.id }),
-      }).catch(() => {})
-      showError('El usuario no está disponible')
-    }
-
     const handleAck = () => {
       clearTimeout(timeoutRef.current)
       timeoutRef.current = setTimeout(() => {
@@ -314,7 +306,6 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
     socket.on('signal:ice-candidate', handleIceCandidate)
     socket.on('call:end', handleEnd)
     socket.on('call:busy', handleBusy)
-    socket.on('call:unreachable', handleUnreachable)
     socket.on('call:ack', handleAck)
     socket.on('call:debug', handleDebug)
     socket.on('call:mute', handleRemoteMute)
@@ -325,7 +316,6 @@ const VoiceCall = forwardRef(({ profile }, ref) => {
       socket.off('signal:ice-candidate', handleIceCandidate)
       socket.off('call:end', handleEnd)
       socket.off('call:busy', handleBusy)
-      socket.off('call:unreachable', handleUnreachable)
       socket.off('call:ack', handleAck)
       socket.off('call:debug', handleDebug)
       socket.off('call:mute', handleRemoteMute)

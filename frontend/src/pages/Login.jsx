@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { clearAuthToken } from '../lib/api'
 import ColorBends from '../components/ColorBends'
 import DotField from '../components/DotField'
 
@@ -10,6 +11,10 @@ export default function Login() {
   const [error, setError] = useState(null)
   const [googleLoading, setGoogleLoading] = useState(false)
   const deleted = location.state?.deleted
+
+  useEffect(() => {
+    clearAuthToken()
+  }, [])
 
   const handleGoogle = async () => {
     setGoogleLoading(true)
