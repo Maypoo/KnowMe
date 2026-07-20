@@ -27,16 +27,20 @@ export function setupSocket(server) {
   })
 
   io.use(async (socket, next) => {
-    const cookieHeader = socket.handshake.headers.cookie || ''
-    const cookies = {}
-    cookieHeader.split(';').forEach(c => {
-      const idx = c.indexOf('=')
-      if (idx > 0) {
-        cookies[c.substring(0, idx).trim()] = c.substring(idx + 1).trim()
-      }
-    })
+    let token = socket.handshake.auth?.token
 
-    const token = cookies['sb-access-token']
+    if (!token) {
+      const cookieHeader = socket.handshake.headers.cookie || ''
+      const cookies = {}
+      cookieHeader.split(';').forEach(c => {
+        const idx = c.indexOf('=')
+        if (idx > 0) {
+          cookies[c.substring(0, idx).trim()] = c.substring(idx + 1).trim()
+        }
+      })
+      token = cookies['sb-access-token']
+    }
+
     if (!token) {
       return next(new Error('No autenticado'))
     }
