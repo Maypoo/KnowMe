@@ -194,7 +194,14 @@ export default function PublicProfile() {
               (() => {
                 const c = countries.find(c => c.code === profile.country)
                 const age = profile.show_age && profile.birth_date
-                  ? new Date().getFullYear() - new Date(profile.birth_date).getFullYear()
+                  ? (() => {
+                      const [y, m, d] = profile.birth_date.split('-').map(Number)
+                      const today = new Date()
+                      let a = today.getFullYear() - y
+                      const md = today.getMonth() - (m - 1)
+                      if (md < 0 || (md === 0 && today.getDate() < d)) a--
+                      return a
+                    })()
                   : null
                 return age ? (
                   <p className="text-zinc-400 text-sm mt-2">
@@ -210,7 +217,14 @@ export default function PublicProfile() {
               })()
             ) : (
               profile.show_age && profile.birth_date && (
-                <p className="text-zinc-400 text-sm mt-2">{new Date().getFullYear() - new Date(profile.birth_date).getFullYear()} años</p>
+                <p className="text-zinc-400 text-sm mt-2">{(() => {
+                  const [y, m, d] = profile.birth_date.split('-').map(Number)
+                  const today = new Date()
+                  let a = today.getFullYear() - y
+                  const md = today.getMonth() - (m - 1)
+                  if (md < 0 || (md === 0 && today.getDate() < d)) a--
+                  return a
+                })()} años</p>
               )
             )}
             {profile.created_at && (
