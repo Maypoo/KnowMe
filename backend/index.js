@@ -77,6 +77,22 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 })
 
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: 'Demasiadas solicitudes. Esperá un minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || req.ip,
+})
+
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    return generalLimiter(req, res, next)
+  }
+  next()
+})
+
 const rotatedTokens = new Map()
 setInterval(() => {
   const cutoff = Date.now() - 3600000

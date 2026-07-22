@@ -1,3 +1,7 @@
+:root {
+  --color-accent: #6659ff;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

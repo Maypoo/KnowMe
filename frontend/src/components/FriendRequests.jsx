@@ -83,7 +83,7 @@ export default function FriendRequests() {
                 <button
                   onClick={() => handleRespond(req.id, 'accepted')}
                   className="rounded-lg px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90"
-                  style={{ backgroundColor: '#6659ff' }}
+                  style={{ backgroundColor: 'var(--color-accent)' }}
                 >
                   Aceptar
                 </button>

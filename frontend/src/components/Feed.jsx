@@ -171,7 +171,7 @@ export default function Feed() {
                 <button
                   onClick={() => handleFeedLike(post.id)}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl transition hover:opacity-90 active:scale-95"
-                  style={{ backgroundColor: '#6659ff' }}
+                  style={{ backgroundColor: 'var(--color-accent)' }}
                 >
                   <Heart
                     size={20}
@@ -185,14 +185,14 @@ export default function Feed() {
                 {post.friend_request_status === 'accepted' ? (
                   <span
                     className="rounded-xl px-4 py-2.5 text-sm text-white opacity-60"
-                    style={{ backgroundColor: '#6659ff' }}
+                    style={{ backgroundColor: 'var(--color-accent)' }}
                   >
                     Amigos
                   </span>
                 ) : post.friend_request_status === 'pending' ? (
                   <span
                     className="rounded-xl px-4 py-2.5 text-sm text-white opacity-60"
-                    style={{ backgroundColor: '#6659ff' }}
+                    style={{ backgroundColor: 'var(--color-accent)' }}
                   >
                     Solicitud enviada
                   </span>
@@ -201,7 +201,7 @@ export default function Feed() {
                     onClick={() => handleSendFriendRequest(post)}
                     disabled={sendingRequest === post.id}
                     className="rounded-xl px-4 py-2.5 text-sm text-white transition hover:opacity-90 disabled:opacity-50"
-                    style={{ backgroundColor: '#6659ff' }}
+                    style={{ backgroundColor: 'var(--color-accent)' }}
                   >
                     {sendingRequest === post.id ? 'Enviando...' : 'Enviar solicitud'}
                   </button>

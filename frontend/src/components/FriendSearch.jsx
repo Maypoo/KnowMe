@@ -61,7 +61,7 @@ export default function FriendSearch() {
         <button
           type="submit"
           className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
-          style={{ backgroundColor: '#6659ff' }}
+          style={{ backgroundColor: 'var(--color-accent)' }}
         >
           Agregar
         </button>

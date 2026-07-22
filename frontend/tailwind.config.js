@@ -7,6 +7,9 @@ export default {
       fontFamily: {
         sans: ['Geist', 'sans-serif'],
       },
+      colors: {
+        accent: '#6659ff',
+      },
     },
   },
   plugins: [],

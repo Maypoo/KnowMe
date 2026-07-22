@@ -45,6 +45,14 @@ export async function api(path, options = {}) {
         ...options,
         headers,
       })
+      const origJson = res.json.bind(res)
+      res.json = async () => {
+        try {
+          return await origJson()
+        } catch {
+          return null
+        }
+      }
       return res
     } catch (err) {
       lastError = err
@@ -55,4 +63,13 @@ export async function api(path, options = {}) {
   }
 
   throw lastError
+}
+
+export async function apiJson(path, options = {}) {
+  const res = await api(path, options)
+  try {
+    return await res.json()
+  } catch {
+    return null
+  }
 }

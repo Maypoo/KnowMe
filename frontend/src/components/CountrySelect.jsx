@@ -91,7 +91,7 @@ export default function CountrySelect({ value, onChange }) {
                   <img src={getFlagUrl(c.code)} alt="" className="w-5 h-auto rounded-sm" />
                   <span>{c.name}</span>
                   {value === c.code && (
-                    <Check size={16} className="ml-auto text-[#6659ff]" />
+                    <Check size={16} className="ml-auto text-accent" />
                   )}
                 </button>
               ))

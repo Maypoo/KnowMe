@@ -159,7 +159,7 @@ export default function DatePicker({ value, onChange }) {
                       onClick={() => handleSelectDay(d)}
                       className={`text-xs rounded-lg py-1.5 transition ${
                         isSelected
-                          ? 'bg-[#6659ff] text-white'
+                          ? 'bg-accent text-white'
                           : disabled
                             ? 'text-zinc-700 cursor-not-allowed'
                             : 'text-zinc-300 hover:bg-zinc-800'
@@ -222,7 +222,7 @@ export default function DatePicker({ value, onChange }) {
                       onClick={() => { setViewMonth(i); setView('days') }}
                       className={`text-xs rounded-lg py-2 transition ${
                         viewMonth === i && viewYear === (selected?.getFullYear())
-                          ? 'bg-[#6659ff] text-white'
+                          ? 'bg-accent text-white'
                           : disabled
                             ? 'text-zinc-700 cursor-not-allowed'
                             : 'text-zinc-300 hover:bg-zinc-800'
@@ -260,7 +260,7 @@ export default function DatePicker({ value, onChange }) {
                       onClick={() => { setViewYear(y); setView('months') }}
                       className={`text-xs rounded-lg py-2 transition ${
                         viewYear === y
-                          ? 'bg-[#6659ff] text-white'
+                          ? 'bg-accent text-white'
                           : 'text-zinc-300 hover:bg-zinc-800'
                       }`}
                     >

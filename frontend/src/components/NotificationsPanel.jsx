@@ -186,7 +186,7 @@ export default function NotificationsPanel() {
                 <button
                   onClick={(e) => { e.stopPropagation(); handleFollowBack(notif.fromUser.username, notif.fromUser.id) }}
                   className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 ml-3"
-                  style={{ backgroundColor: '#6659ff' }}
+                  style={{ backgroundColor: 'var(--color-accent)' }}
                 >
                   Seguir también
                 </button>
@@ -203,7 +203,7 @@ export default function NotificationsPanel() {
                 <button
                   onClick={(e) => { e.stopPropagation(); handleSendMessage(notif.fromUser) }}
                   className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 ml-3"
-                  style={{ backgroundColor: '#6659ff' }}
+                  style={{ backgroundColor: 'var(--color-accent)' }}
                 >
                   Enviar mensaje
                 </button>

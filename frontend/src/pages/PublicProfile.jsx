@@ -253,7 +253,7 @@ export default function PublicProfile() {
             <button
               onClick={() => navigate('/profile/edit')}
               className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
-              style={{ backgroundColor: '#6659ff' }}
+              style={{ backgroundColor: 'var(--color-accent)' }}
             >
               Editar perfil
             </button>
@@ -271,7 +271,7 @@ export default function PublicProfile() {
                   <button
                     onClick={handleFollow}
                     className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
-                    style={{ backgroundColor: '#6659ff' }}
+                    style={{ backgroundColor: 'var(--color-accent)' }}
                   >
                     Seguir
                   </button>
@@ -309,7 +309,7 @@ export default function PublicProfile() {
                 <button
                   onClick={handleSendMessage}
                   className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
-                  style={{ backgroundColor: '#6659ff' }}
+                  style={{ backgroundColor: 'var(--color-accent)' }}
                 >
                   <Send size={16} className="inline-block mr-1.5" />
                   Enviar mensaje
@@ -329,7 +329,7 @@ export default function PublicProfile() {
                   <button
                     onClick={() => handlePostLike(post.id)}
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl transition hover:opacity-90 active:scale-95"
-                    style={{ backgroundColor: '#6659ff' }}
+                    style={{ backgroundColor: 'var(--color-accent)' }}
                   >
                     <Heart
                       size={20}

@@ -236,7 +236,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
                       msg.sender_id === profile.id ? 'rounded-br-md' : 'rounded-bl-md'
                     }`}
                     style={{
-                      backgroundColor: msg.sender_id === profile.id ? '#6659ff' : '#27272a',
+                      backgroundColor: msg.sender_id === profile.id ? 'var(--color-accent)' : '#27272a',
                     }}
                   >
                     <p className="text-zinc-100 text-sm">{msg.content}</p>
@@ -265,7 +265,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
             <button
               disabled
               className="rounded-full px-5 py-2 text-sm font-medium text-white opacity-60 cursor-not-allowed"
-              style={{ backgroundColor: '#6659ff' }}
+              style={{ backgroundColor: 'var(--color-accent)' }}
             >
               Solicitud de amistad enviada
             </button>
@@ -273,7 +273,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
             <button
               onClick={handleSendFriendRequest}
               className="rounded-full px-5 py-2 text-sm font-medium text-white transition hover:opacity-80"
-              style={{ backgroundColor: '#6659ff' }}
+              style={{ backgroundColor: 'var(--color-accent)' }}
             >
               Enviar solicitud de amistad
             </button>
@@ -294,7 +294,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
             onClick={handleSend}
             disabled={!input.trim() || sendMutation.isPending}
             className="rounded-full p-2.5 transition disabled:opacity-40"
-            style={{ backgroundColor: '#6659ff' }}
+            style={{ backgroundColor: 'var(--color-accent)' }}
           >
             <Send size={18} />
           </button>

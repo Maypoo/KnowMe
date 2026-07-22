@@ -62,7 +62,7 @@ export default function ChatsList({ onSelectChat }) {
                           <span
                             className="rounded-full text-[11px] font-medium flex items-center justify-center"
                             style={{
-                              backgroundColor: '#6659ff',
+                              backgroundColor: 'var(--color-accent)',
                               color: '#fff',
                               minWidth: 18,
                               height: 18,

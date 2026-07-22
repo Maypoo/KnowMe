@@ -405,7 +405,7 @@ export default function Home() {
               type="submit"
               disabled={searching || searchQuery.length < 1}
               className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: '#6659ff' }}
+              style={{ backgroundColor: 'var(--color-accent)' }}
             >
               Buscar
             </button>
@@ -538,7 +538,7 @@ export default function Home() {
                     <span
                       className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
                       style={{
-                        backgroundColor: '#6659ff',
+                        backgroundColor: 'var(--color-accent)',
                         color: '#fff',
                         minWidth: 18,
                         height: 18,
@@ -583,7 +583,7 @@ export default function Home() {
                           <button
                             onClick={handleEdit}
                             className="rounded-lg p-2 transition hover:opacity-80"
-                            style={{ backgroundColor: '#6659ff' }}
+                            style={{ backgroundColor: 'var(--color-accent)' }}
                           >
                             <Edit size={18} strokeWidth={2.5} />
                           </button>
@@ -602,7 +602,7 @@ export default function Home() {
                         disabled={!!myPost && !editing || publishing || !postContent.trim() || editing && postContent.trim() === myPost?.content}
                         className="px-6 py-2 rounded-lg text-white font-medium transition"
                         style={{
-                          backgroundColor: !postContent.trim() ? '#3f3f46' : '#6659ff',
+                          backgroundColor: !postContent.trim() ? '#3f3f46' : 'var(--color-accent)',
                           opacity: !editing && !!myPost || editing && postContent.trim() === myPost?.content ? 0.5 : 1,
                           cursor: !postContent.trim() ? 'not-allowed' : 'pointer',
                         }}
@@ -632,7 +632,7 @@ export default function Home() {
                       <button
                         onClick={handleNewChat}
                         className="rounded-full p-2 transition hover:opacity-80"
-                        style={{ backgroundColor: '#6659ff' }}
+                        style={{ backgroundColor: 'var(--color-accent)' }}
                       >
                         <Plus size={20} strokeWidth={2.5} />
                       </button>
@@ -690,7 +690,7 @@ export default function Home() {
                 <span
                   className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
                   style={{
-                    backgroundColor: '#6659ff',
+                    backgroundColor: 'var(--color-accent)',
                     color: '#fff',
                     minWidth: 18,
                     height: 18,
@@ -705,7 +705,7 @@ export default function Home() {
             <button
               onClick={() => setView('plus')}
               className="rounded-full p-2 transition hover:opacity-80"
-              style={{ backgroundColor: '#6659ff' }}
+              style={{ backgroundColor: 'var(--color-accent)' }}
             >
               <Plus size={24} strokeWidth={2.5} />
             </button>
@@ -719,7 +719,7 @@ export default function Home() {
                 <span
                   className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
                   style={{
-                    backgroundColor: '#6659ff',
+                    backgroundColor: 'var(--color-accent)',
                     color: '#fff',
                     minWidth: 18,
                     height: 18,
@@ -744,7 +744,7 @@ export default function Home() {
                 <span
                   className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
                   style={{
-                    backgroundColor: '#6659ff',
+                    backgroundColor: 'var(--color-accent)',
                     color: '#fff',
                     minWidth: 18,
                     height: 18,

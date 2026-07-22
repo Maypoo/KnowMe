@@ -14,6 +14,7 @@ export default function NewChat({ onSelectFriend, onBack }) {
       .then(data => {
         if (data.friends) setFriends(data.friends)
       })
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 

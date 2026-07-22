@@ -596,7 +596,7 @@ export default function EditProfile() {
                 type="checkbox"
                 checked={showAge}
                 onChange={e => setShowAge(e.target.checked)}
-                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-[#6659ff] focus:ring-[#6659ff] focus:ring-offset-0 [color-scheme:dark]"
+                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
               />
               <span className="text-sm text-zinc-400">Mostrar edad en el perfil</span>
             </label>
@@ -621,7 +621,7 @@ export default function EditProfile() {
                 type="checkbox"
                 checked={showCountry}
                 onChange={e => setShowCountry(e.target.checked)}
-                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-[#6659ff] focus:ring-[#6659ff] focus:ring-offset-0 [color-scheme:dark]"
+                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
               />
               <span className="text-sm text-zinc-400">Mostrar país en el perfil</span>
             </label>
@@ -696,7 +696,7 @@ export default function EditProfile() {
                       step="0.1"
                       value={zoom}
                       onChange={e => setZoom(Number(e.target.value))}
-                      className="flex-1 h-1.5 accent-[#6659ff] cursor-pointer"
+                      className="flex-1 h-1.5 accent-accent cursor-pointer"
                     />
                     <span className="text-xs text-zinc-600 select-none w-3 text-center leading-none">+</span>
                   </div>
@@ -734,7 +734,7 @@ export default function EditProfile() {
                   <button
                     onClick={handleSaveEditor}
                     className="text-sm text-white rounded-lg px-5 py-2 transition"
-                    style={{ backgroundColor: '#6659ff' }}
+                    style={{ backgroundColor: 'var(--color-accent)' }}
                   >
                     Guardar
                   </button>
