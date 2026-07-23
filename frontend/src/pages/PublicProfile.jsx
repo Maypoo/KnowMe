@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Heart, Send } from 'lucide-react'
+import { ArrowLeft, Heart, Send, User, X } from 'lucide-react'
 import NumberFlow from '@number-flow/react'
 import { api } from '../lib/api'
 import Avatar from '../components/Avatar'
@@ -23,6 +23,7 @@ export default function PublicProfile() {
   const [requestLoading, setRequestLoading] = useState(false)
   const [showFollowers, setShowFollowers] = useState(false)
   const [showFriends, setShowFriends] = useState(false)
+  const [showAvatar, setShowAvatar] = useState(false)
 
   const [post, setPost] = useState(null)
 
@@ -183,7 +184,9 @@ export default function PublicProfile() {
           <ArrowLeft size={14} className="inline -mt-0.5" /> Volver
         </button>
         <div className="flex flex-col items-center gap-4">
-          <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-zinc-800" />
+          <button onClick={() => setShowAvatar(true)} className="transition active:scale-95">
+            <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-zinc-800 cursor-pointer" />
+          </button>
 
           <div className="text-center">
             <h1 className="text-xl font-semibold">{profile.username}</h1>
@@ -273,7 +276,7 @@ export default function PublicProfile() {
                     className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
                     style={{ backgroundColor: 'var(--color-accent)' }}
                   >
-                    Seguir
+                    {profile.is_followed_by ? 'Seguir también' : 'Seguir'}
                   </button>
                 )}
                 {!profile.friend_request_status && (
@@ -358,6 +361,31 @@ export default function PublicProfile() {
       )}
       {showFriends && (
         <FriendsListModal username={profile.username} onClose={() => setShowFriends(false)} />
+      )}
+      {showAvatar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => setShowAvatar(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-center p-4 border-b border-zinc-800 relative">
+              <h2 className="text-zinc-100 font-semibold text-lg">Foto de perfil</h2>
+              <button onClick={() => setShowAvatar(false)} className="absolute right-4 text-zinc-400 hover:text-zinc-200 transition p-1">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 flex items-center justify-center">
+              {profile.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={profile.username}
+                  className="max-w-full max-h-[60vh] object-cover rounded-full"
+                />
+              ) : (
+                <div className="bg-zinc-800 rounded-full p-12">
+                  <User size={96} className="text-zinc-400" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

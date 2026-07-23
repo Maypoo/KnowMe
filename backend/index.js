@@ -521,12 +521,16 @@ app.get('/api/profile/:username', auth, asyncHandler(async (req, res) => {
   let isFollowing = false
   let friendRequestStatus = null
 
+  let isFollowedBy = false
+
   if (req.user.id !== profile.id) {
-    const [{ count: followCount }, { data: friendReq }] = await Promise.all([
+    const [{ count: followCount }, { data: friendReq }, { count: followerBackCount }] = await Promise.all([
       supabase.from('followers').select('*', { count: 'exact', head: true }).eq('follower_id', req.user.id).eq('following_id', profile.id),
       supabase.from('friend_requests').select('status').or(`and(sender_id.eq.${req.user.id},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${req.user.id})`).maybeSingle(),
+      supabase.from('followers').select('*', { count: 'exact', head: true }).eq('follower_id', profile.id).eq('following_id', req.user.id),
     ])
     isFollowing = (followCount || 0) > 0
+    isFollowedBy = (followerBackCount || 0) > 0
     friendRequestStatus = friendReq?.status || null
   }
 
@@ -537,6 +541,7 @@ app.get('/api/profile/:username', auth, asyncHandler(async (req, res) => {
       following_count: followingCount || 0,
       friend_count: friendCountVal,
       is_following: isFollowing,
+      is_followed_by: isFollowedBy,
       friend_request_status: friendRequestStatus,
     },
   })
@@ -2131,8 +2136,171 @@ app.post('/api/calls/missed', auth, asyncHandler(async (req, res) => {
   res.json({ sent: true })
 }))
 
+async function resolveTagNames(req, names) {
+  const tagIds = []
+  const LETTERS_ONLY = /^[a-zA-ZáéíóúñüÁÉÍÓÚÑÜ]+$/
+
+  const { count: todayCount } = await supabase
+    .from('tags')
+    .select('id', { count: 'exact', head: true })
+    .eq('created_by', req.user.id)
+    .gte('created_at', new Date(new Date().toDateString()).toISOString())
+
+  const newNames = []
+
+  for (const raw of names) {
+    const name = raw.trim().toLowerCase().slice(0, 20)
+    if (!name) continue
+    if (!LETTERS_ONLY.test(name)) {
+      const e = new Error(`"${name}" solo puede contener letras`)
+      e.status = 400
+      throw e
+    }
+
+    const { data: existing } = await supabase
+      .from('tags')
+      .select('id')
+      .eq('name', name)
+      .maybeSingle()
+
+    if (existing) {
+      tagIds.push(existing.id)
+    } else {
+      newNames.push(name)
+    }
+  }
+
+  if (todayCount + newNames.length > 5) {
+    const e = new Error('Límite diario de etiquetas nuevas alcanzado.')
+    e.status = 429
+    throw e
+  }
+
+  for (const name of newNames) {
+    const { data: created } = await supabase
+      .from('tags')
+      .insert({ name, created_by: req.user.id })
+      .select('id')
+      .single()
+
+    if (created) {
+      tagIds.push(created.id)
+    }
+  }
+
+  return tagIds
+}
+
+async function syncPostTags(postId, tagIds) {
+  await supabase.from('post_tags').delete().eq('post_id', postId)
+  if (tagIds.length > 0) {
+    await supabase.from('post_tags').insert(tagIds.map(tag_id => ({ post_id: postId, tag_id })))
+  }
+}
+
+app.post('/api/tags/resolve', auth, asyncHandler(async (req, res) => {
+  const { tag_names } = req.body
+  if (!Array.isArray(tag_names)) {
+    return res.status(400).json({ error: 'tag_names debe ser un array' })
+  }
+  const tagIds = await resolveTagNames(req, tag_names)
+  res.json({ tag_ids: tagIds })
+}))
+
+app.get('/api/tags', auth, asyncHandler(async (req, res) => {
+  const { data: tags, error } = await supabase
+    .from('tags')
+    .select('*, post_tags(count)')
+
+  if (error) return res.status(500).json({ error: 'Error al obtener tags' })
+
+  const result = (tags || [])
+    .map(t => ({
+      id: t.id,
+      name: t.name,
+      post_count: t.post_tags?.[0]?.count ?? 0,
+    }))
+    .sort((a, b) => b.post_count - a.post_count)
+
+  res.json({ tags: result })
+}))
+
+app.get('/api/posts/:id/tags', auth, asyncHandler(async (req, res) => {
+  const { data: postTags, error } = await supabase
+    .from('post_tags')
+    .select('tag_id, tags(id, name)')
+    .eq('post_id', req.params.id)
+
+  if (error) return res.status(500).json({ error: 'Error al obtener tags del post' })
+
+  res.json({ tags: (postTags || []).map(pt => pt.tags) })
+}))
+
+app.put('/api/posts/:id/tags', auth, asyncHandler(async (req, res) => {
+  const { tag_ids, tag_names } = req.body
+
+  const { data: post } = await supabase
+    .from('posts')
+    .select('user_id')
+    .eq('id', req.params.id)
+    .maybeSingle()
+
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' })
+  if (post.user_id !== req.user.id) {
+    return res.status(403).json({ error: 'No podés editar tags de otro post' })
+  }
+
+  let finalIds
+  if (Array.isArray(tag_names)) {
+    finalIds = await resolveTagNames(req, tag_names)
+  } else if (Array.isArray(tag_ids)) {
+    finalIds = tag_ids
+  } else {
+    finalIds = []
+  }
+
+  await syncPostTags(req.params.id, finalIds)
+
+  const { data: tags } = await supabase
+    .from('post_tags')
+    .select('tag_id, tags(id, name)')
+    .eq('post_id', req.params.id)
+
+  res.json({ tags: (tags || []).map(pt => pt.tags) })
+}))
+
+app.get('/api/preferences/tags', auth, asyncHandler(async (req, res) => {
+  const { data: prefs } = await supabase
+    .from('user_tag_preferences')
+    .select('tag_id')
+    .eq('user_id', req.user.id)
+
+  res.json({ tag_ids: (prefs || []).map(p => p.tag_id) })
+}))
+
+app.put('/api/preferences/tags', auth, asyncHandler(async (req, res) => {
+  const { tag_ids } = req.body
+  if (!Array.isArray(tag_ids)) {
+    return res.status(400).json({ error: 'tag_ids debe ser un array' })
+  }
+  if (tag_ids.length > 5) {
+    return res.status(400).json({ error: 'Máximo 5 etiquetas' })
+  }
+
+  await supabase.from('user_tag_preferences').delete().eq('user_id', req.user.id)
+
+  if (tag_ids.length > 0) {
+    const { error } = await supabase.from('user_tag_preferences').insert(
+      tag_ids.map(tag_id => ({ user_id: req.user.id, tag_id }))
+    )
+    if (error) return res.status(500).json({ error: 'Error al guardar preferencias' })
+  }
+
+  res.json({ tag_ids })
+}))
+
 app.post('/api/posts', auth, asyncHandler(async (req, res) => {
-  const { content } = req.body
+  const { content, tag_ids, tag_names } = req.body
   if (!content || !content.trim()) {
     return res.status(400).json({ error: 'El contenido es requerido' })
   }
@@ -2144,6 +2312,15 @@ app.post('/api/posts', auth, asyncHandler(async (req, res) => {
     .select('id')
     .eq('user_id', req.user.id)
     .maybeSingle()
+
+  const tagsProvided = Array.isArray(tag_names) || Array.isArray(tag_ids)
+
+  let finalTagIds = []
+  if (Array.isArray(tag_names)) {
+    finalTagIds = await resolveTagNames(req, tag_names)
+  } else if (Array.isArray(tag_ids)) {
+    finalTagIds = tag_ids
+  }
 
   if (existing) {
     const { data: post, error } = await supabase
@@ -2157,6 +2334,8 @@ app.post('/api/posts', auth, asyncHandler(async (req, res) => {
 
     await supabase.from('post_likes').delete().eq('post_id', existing.id)
 
+    if (tagsProvided) await syncPostTags(existing.id, finalTagIds)
+
     return res.json({ post, likesReset: true })
   }
 
@@ -2167,6 +2346,8 @@ app.post('/api/posts', auth, asyncHandler(async (req, res) => {
     .single()
 
   if (error) return res.status(500).json({ error: 'Error al crear post' })
+
+  if (tagsProvided) await syncPostTags(post.id, finalTagIds)
 
   res.status(201).json({ post })
 }))
@@ -2196,11 +2377,48 @@ app.get('/api/posts/mine', auth, asyncHandler(async (req, res) => {
 
   if (error) return res.status(500).json({ error: 'Error al obtener post' })
 
-  res.json({ post })
+  let tags = []
+  if (post) {
+    const { data: postTags } = await supabase
+      .from('post_tags')
+      .select('tag_id, tags(id, name)')
+      .eq('post_id', post.id)
+    tags = (postTags || []).map(pt => pt.tags)
+  }
+
+  res.json({ post: post ? { ...post, tags } : null })
 }))
 
 app.get('/api/posts/feed', auth, asyncHandler(async (req, res) => {
-  const { data: posts, error } = await supabase
+  const page = Math.max(1, parseInt(req.query.page) || 1)
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20))
+
+  const { data: userPrefs, error: prefsError } = await supabase
+    .from('user_tag_preferences')
+    .select('tag_id')
+    .eq('user_id', req.user.id)
+
+  if (prefsError) console.error('Error fetching preferences:', prefsError)
+
+  const preferredTagIds = new Set((userPrefs || []).map(p => p.tag_id))
+
+  const { data: sentFriends } = await supabase
+    .from('friend_requests')
+    .select('receiver_id')
+    .eq('sender_id', req.user.id)
+    .eq('status', 'accepted')
+
+  const { data: receivedFriends } = await supabase
+    .from('friend_requests')
+    .select('sender_id')
+    .eq('receiver_id', req.user.id)
+    .eq('status', 'accepted')
+
+  const friendIds = []
+  if (sentFriends) friendIds.push(...sentFriends.map(r => r.receiver_id))
+  if (receivedFriends) friendIds.push(...receivedFriends.map(r => r.sender_id))
+
+  let query = supabase
     .from('posts')
     .select(`
       id,
@@ -2211,72 +2429,198 @@ app.get('/api/posts/feed', auth, asyncHandler(async (req, res) => {
       post_likes(count)
     `)
     .neq('user_id', req.user.id)
-    .order('created_at', { ascending: false })
+
+  if (friendIds.length > 0) {
+    query = query.not('user_id', 'in', `(${friendIds.map(id => `"${id}"`).join(',')})`)
+  }
+
+  const { data: posts, error } = await query
 
   if (error) return res.status(500).json({ error: 'Error al obtener feed' })
 
   if (!posts || posts.length === 0) {
-    return res.json({ posts: [] })
+    return res.json({ posts: [], total: 0, page, limit, hasMore: false })
   }
 
   const userIds = [...new Set(posts.map(p => p.user_id))]
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, username, display_name, avatar_url')
-    .in('id', userIds)
+  const postIds = posts.map(p => p.id)
+
+  const [profilesRes, myLikesRes, sentRequestsRes, receivedRequestsRes, postTagsRes] = await Promise.all([
+    supabase.from('profiles').select('id, username, display_name, avatar_url').in('id', userIds),
+    supabase.from('post_likes').select('post_id').in('post_id', postIds).eq('user_id', req.user.id),
+    supabase.from('friend_requests').select('receiver_id, status').eq('sender_id', req.user.id).in('receiver_id', userIds),
+    supabase.from('friend_requests').select('sender_id, status').eq('receiver_id', req.user.id).in('sender_id', userIds),
+    supabase.from('post_tags').select('post_id, tag_id, tags(id, name)').in('post_id', postIds),
+  ])
 
   const profileMap = {}
-  if (profiles) {
-    profiles.forEach(pr => { profileMap[pr.id] = pr })
-  }
+  if (profilesRes.data) profilesRes.data.forEach(pr => { profileMap[pr.id] = pr })
 
-  const postIds = posts.map(p => p.id)
-  const { data: myLikes } = await supabase
-    .from('post_likes')
-    .select('post_id')
-    .in('post_id', postIds)
-    .eq('user_id', req.user.id)
-
-  const likedPostIds = new Set(myLikes?.map(l => l.post_id) || [])
-
-  const { data: sentRequests } = await supabase
-    .from('friend_requests')
-    .select('receiver_id, status')
-    .eq('sender_id', req.user.id)
-    .in('receiver_id', userIds)
-
-  const { data: receivedRequests } = await supabase
-    .from('friend_requests')
-    .select('sender_id, status')
-    .eq('receiver_id', req.user.id)
-    .in('sender_id', userIds)
+  const likedPostIds = new Set(myLikesRes.data?.map(l => l.post_id) || [])
 
   const friendRequestMap = {}
-  if (sentRequests) {
-    sentRequests.forEach(r => { friendRequestMap[r.receiver_id] = r.status })
+  if (sentRequestsRes.data) {
+    sentRequestsRes.data.forEach(r => { friendRequestMap[r.receiver_id] = r.status })
   }
-  if (receivedRequests) {
-    receivedRequests.forEach(r => {
+  if (receivedRequestsRes.data) {
+    receivedRequestsRes.data.forEach(r => {
       if (!friendRequestMap[r.sender_id]) {
         friendRequestMap[r.sender_id] = r.status
       }
     })
   }
 
-  const enriched = posts.map(p => ({
-    id: p.id,
-    content: p.content,
-    created_at: p.created_at,
-    user_id: p.user_id,
-    username: profileMap[p.user_id]?.username || 'unknown',
-    display_name: profileMap[p.user_id]?.display_name || null,
-    avatar_url: profileMap[p.user_id]?.avatar_url || null,
-    likes_count: p.post_likes?.[0]?.count ?? 0,
-    liked_by_me: likedPostIds.has(p.id),
-    friend_request_status: friendRequestMap[p.user_id] || null,
-  })).filter(p => p.username !== 'unknown')
+  const tagsByPost = {}
+  if (postTagsRes.data) {
+    postTagsRes.data.forEach(pt => {
+      if (!tagsByPost[pt.post_id]) tagsByPost[pt.post_id] = []
+      tagsByPost[pt.post_id].push(pt.tags)
+    })
+  }
 
-  res.json({ posts: enriched })
+  const preferredPostIds = new Set()
+  if (preferredTagIds.size > 0) {
+    for (const [postId, postTags] of Object.entries(tagsByPost)) {
+      if (postTags.some(t => preferredTagIds.has(t.id))) {
+        preferredPostIds.add(postId)
+      }
+    }
+  }
+
+  const now = Date.now()
+
+  const scored = posts
+    .map(p => {
+      const hoursSincePost = (now - new Date(p.created_at).getTime()) / 3600000
+      const recencyScore = 1 / Math.pow(hoursSincePost + 2, 0.5)
+      const likesCount = p.post_likes?.[0]?.count ?? 0
+      const popularityScore = Math.log(likesCount + 1)
+
+      let socialScore = 0
+
+      const preferenceScore = preferredPostIds.has(p.id) ? 5 : 0
+
+      const totalScore = recencyScore * 2 + popularityScore * 1 + preferenceScore
+
+      return {
+        id: p.id,
+        content: p.content,
+        created_at: p.created_at,
+        user_id: p.user_id,
+        username: profileMap[p.user_id]?.username || 'unknown',
+        display_name: profileMap[p.user_id]?.display_name || null,
+        avatar_url: profileMap[p.user_id]?.avatar_url || null,
+        likes_count: likesCount,
+        liked_by_me: likedPostIds.has(p.id),
+        friend_request_status: friendRequestMap[p.user_id] || null,
+        tags: tagsByPost[p.id] || [],
+        _score: totalScore,
+      }
+    })
+    .filter(p => p.username !== 'unknown')
+    .sort((a, b) => b._score - a._score || new Date(b.created_at) - new Date(a.created_at))
+
+  const total = scored.length
+  const offset = (page - 1) * limit
+  const paginated = scored.slice(offset, offset + limit).map(p => {
+    const { _score, ...rest } = p
+    return rest
+  })
+
+  res.json({ posts: paginated, total, page, limit, hasMore: offset + limit < total })
+}))
+
+app.get('/api/posts/friends-feed', auth, asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1)
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20))
+
+  const { data: sent } = await supabase
+    .from('friend_requests')
+    .select('receiver_id')
+    .eq('sender_id', req.user.id)
+    .eq('status', 'accepted')
+
+  const { data: received } = await supabase
+    .from('friend_requests')
+    .select('sender_id')
+    .eq('receiver_id', req.user.id)
+    .eq('status', 'accepted')
+
+  const friendIds = []
+  if (sent) friendIds.push(...sent.map(r => r.receiver_id))
+  if (received) friendIds.push(...received.map(r => r.sender_id))
+
+  if (friendIds.length === 0) {
+    return res.json({ posts: [], total: 0, page, limit, hasMore: false })
+  }
+
+  let query = supabase
+    .from('posts')
+    .select(`
+      id,
+      content,
+      created_at,
+      updated_at,
+      user_id,
+      post_likes(count)
+    `)
+    .in('user_id', friendIds)
+
+  const { data: posts, error } = await query
+
+  if (error) return res.status(500).json({ error: 'Error al obtener feed de amigos' })
+
+  if (!posts || posts.length === 0) {
+    return res.json({ posts: [], total: 0, page, limit, hasMore: false })
+  }
+
+  const userIds = [...new Set(posts.map(p => p.user_id))]
+  const postIds = posts.map(p => p.id)
+
+  const [profilesRes, myLikesRes, postTagsRes] = await Promise.all([
+    supabase.from('profiles').select('id, username, display_name, avatar_url').in('id', userIds),
+    supabase.from('post_likes').select('post_id').in('post_id', postIds).eq('user_id', req.user.id),
+    supabase.from('post_tags').select('post_id, tag_id, tags(id, name)').in('post_id', postIds),
+  ])
+
+  const profileMap = {}
+  if (profilesRes.data) profilesRes.data.forEach(pr => { profileMap[pr.id] = pr })
+
+  const likedPostIds = new Set(myLikesRes.data?.map(l => l.post_id) || [])
+
+  const tagsByPost = {}
+  if (postTagsRes.data) {
+    postTagsRes.data.forEach(pt => {
+      if (!tagsByPost[pt.post_id]) tagsByPost[pt.post_id] = []
+      tagsByPost[pt.post_id].push(pt.tags)
+    })
+  }
+
+  const result = posts
+    .map(p => {
+      const likesCount = p.post_likes?.[0]?.count ?? 0
+      return {
+        id: p.id,
+        content: p.content,
+        created_at: p.created_at,
+        user_id: p.user_id,
+        username: profileMap[p.user_id]?.username || 'unknown',
+        display_name: profileMap[p.user_id]?.display_name || null,
+        avatar_url: profileMap[p.user_id]?.avatar_url || null,
+        likes_count: likesCount,
+        liked_by_me: likedPostIds.has(p.id),
+        friend_request_status: 'accepted',
+        tags: tagsByPost[p.id] || [],
+      }
+    })
+    .filter(p => p.username !== 'unknown')
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+  const total = result.length
+  const offset = (page - 1) * limit
+  const paginated = result.slice(offset, offset + limit)
+
+  res.json({ posts: paginated, total, page, limit, hasMore: offset + limit < total })
 }))
 
 const pendingLikeToggles = new Map()

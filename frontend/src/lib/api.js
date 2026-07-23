@@ -65,11 +65,3 @@ export async function api(path, options = {}) {
   throw lastError
 }
 
-export async function apiJson(path, options = {}) {
-  const res = await api(path, options)
-  try {
-    return await res.json()
-  } catch {
-    return null
-  }
-}

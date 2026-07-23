@@ -21,9 +21,9 @@ export default function FriendsListModal({ username, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="relative bg-zinc-900 rounded-xl w-full max-w-sm max-h-[70vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+        <div className="flex items-center justify-center px-5 py-4 border-b border-zinc-800 relative">
           <h2 className="text-zinc-100 font-medium">Amigos</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 transition">
+          <button onClick={onClose} className="absolute right-5 text-zinc-500 hover:text-zinc-300 transition">
             <X size={20} />
           </button>
         </div>

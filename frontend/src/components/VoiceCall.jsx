@@ -5,7 +5,7 @@ import { api } from '../lib/api'
 import { createPeerConnection } from '../lib/webrtc'
 import Avatar from './Avatar'
 
-const VoiceCall = forwardRef(({ profile }, ref) => {
+const VoiceCall = forwardRef((props, ref) => {
   const [callState, setCallState] = useState('idle')
   const [otherUser, setOtherUser] = useState(null)
   const [error, setError] = useState('')

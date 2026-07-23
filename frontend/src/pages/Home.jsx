@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import NumberFlow from '@number-flow/react'
-import { ArrowLeft, Search, X, Plus, User, Home as HomeIcon, Users, Send, Bell, Edit, Heart, Trash2 } from 'lucide-react'
+import { ArrowLeft, Search, X, Plus, User, Home as HomeIcon, Users, Send, Bell, Edit, Heart, Trash2, Settings } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from '../components/Avatar'
@@ -16,6 +16,7 @@ import ChatConversation from '../components/ChatConversation'
 import NewChat from '../components/NewChat'
 import VoiceCall from '../components/VoiceCall'
 import NotificationsPanel from '../components/NotificationsPanel'
+import TagSelectorModal from '../components/TagSelectorModal'
 
 const TABS = [
   { key: 'friends', label: 'Amigos' },
@@ -57,6 +58,8 @@ export default function Home() {
   const [editing, setEditing] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [tagSelectorOpen, setTagSelectorOpen] = useState(false)
+  const [selectedTagNames, setSelectedTagNames] = useState([])
   const dropdownRef = useRef(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
@@ -67,6 +70,10 @@ export default function Home() {
       return JSON.parse(localStorage.getItem('knowme_recent_searches') || '[]')
     } catch (err) { console.error(err); return [] }
   })
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [prefTagNames, setPrefTagNames] = useState([])
+  const [prefSearch, setPrefSearch] = useState('')
+  const [savingPrefs, setSavingPrefs] = useState(false)
   const voiceCallRef = useRef(null)
   const viewRef = useRef(view)
   useEffect(() => { viewRef.current = view }, [view])
@@ -206,6 +213,52 @@ export default function Home() {
     enabled: !!profile,
   })
 
+  const { data: allTags = [] } = useQuery({
+    queryKey: ['tags'],
+    queryFn: async () => {
+      const res = await api('/api/tags')
+      const data = await res.json()
+      return data.tags || []
+    },
+    staleTime: 60000,
+  })
+
+  const { data: prefTagIds = [] } = useQuery({
+    queryKey: ['preferences', 'tags'],
+    queryFn: async () => {
+      const res = await api('/api/preferences/tags')
+      const data = await res.json()
+      return data.tag_ids || []
+    },
+    enabled: !!profile,
+  })
+
+  useEffect(() => {
+    const names = prefTagIds
+      .map(id => allTags.find(t => t.id === id)?.name)
+      .filter(Boolean)
+    setPrefTagNames(prev => {
+      if (prev.length === names.length && prev.every((n, i) => n === names[i]))
+        return prev
+      return names
+    })
+  }, [prefTagIds, allTags])
+
+  useEffect(() => {
+    if (!preferencesOpen) {
+      setPrefSearch('')
+    } else {
+      const names = prefTagIds
+        .map(id => allTags.find(t => t.id === id)?.name)
+        .filter(Boolean)
+      setPrefTagNames(prev => {
+        if (prev.length === names.length && prev.every((n, i) => n === names[i]))
+          return prev
+        return names
+      })
+    }
+  }, [preferencesOpen, prefTagIds, allTags])
+
   useEffect(() => {
     if (!profile) return
     localStorage.setItem(HOME_STATE_KEY, JSON.stringify({ view, tab, activeChat, chatsView }))
@@ -273,6 +326,7 @@ export default function Home() {
   useEffect(() => {
     if (myPost !== undefined && !editing) {
       setPostContent(myPost?.content ?? '')
+      setSelectedTagNames(myPost?.tags?.map(t => t.name) ?? [])
     }
   }, [myPost, editing])
 
@@ -284,9 +338,13 @@ export default function Home() {
       const res = await api('/api/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: postContent.trim() }),
+        body: JSON.stringify({ content: postContent.trim(), tag_names: selectedTagNames }),
       })
       const data = await res.json()
+      if (!res.ok) {
+        console.error(data.error)
+        return
+      }
       if (data.post) {
         setEditing(false)
         queryClient.invalidateQueries({ queryKey: ['myPost'] })
@@ -296,6 +354,52 @@ export default function Home() {
       console.error(err)
     }
     setPublishing(false)
+  }
+
+  const handleSaveTags = async (tagNames) => {
+    const isExisting = !!myPost
+    const res = await api(
+      isExisting ? `/api/posts/${myPost.id}/tags` : '/api/tags/resolve',
+      {
+        method: isExisting ? 'PUT' : 'POST',
+        body: JSON.stringify({ tag_names: tagNames }),
+      }
+    )
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Error al guardar etiquetas')
+    setSelectedTagNames(tagNames)
+    if (myPost) {
+      queryClient.invalidateQueries({ queryKey: ['myPost'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+    }
+  }
+
+  const handleSavePreferences = async () => {
+    if (savingPrefs) return
+    setSavingPrefs(true)
+    try {
+      const res = await api('/api/tags/resolve', {
+        method: 'POST',
+        body: JSON.stringify({ tag_names: prefTagNames }),
+      })
+      const resolved = await res.json()
+      if (!res.ok) throw new Error(resolved.error || 'Error al guardar preferencias')
+
+      const saveRes = await api('/api/preferences/tags', {
+        method: 'PUT',
+        body: JSON.stringify({ tag_ids: resolved.tag_ids }),
+      })
+      if (!saveRes.ok) {
+        const errData = await saveRes.json()
+        throw new Error(errData.error || 'Error al guardar preferencias')
+      }
+      queryClient.invalidateQueries({ queryKey: ['preferences', 'tags'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+      setPreferencesOpen(false)
+    } catch (err) {
+      console.error(err)
+    }
+    setSavingPrefs(false)
   }
 
   const handleEdit = () => {
@@ -491,6 +595,12 @@ export default function Home() {
             <h1 className="text-2xl font-semibold">KnowMe</h1>
             <div className="flex items-center gap-4">
               <button
+                onClick={() => setPreferencesOpen(true)}
+                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+              >
+                <Settings size={20} />
+              </button>
+              <button
                 onClick={() => { setView('search'); setSearchQuery(''); setSearchResults([]); setSearched(false) }}
                 className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
               >
@@ -568,6 +678,15 @@ export default function Home() {
                     readOnly={!!myPost && !editing}
                     maxLength={300}
                   />
+                  {selectedTagNames.length > 0 && (
+                    <div className="w-full flex items-center gap-2 flex-wrap">
+                      {selectedTagNames.map(name => (
+                        <span key={name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-sm font-medium text-zinc-200 bg-zinc-700">
+                          <span>#{name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="w-full flex items-center justify-between">
                     <span className="text-zinc-500 text-sm">{postContent.length}/300</span>
                     <div className="flex items-center gap-2">
@@ -580,14 +699,25 @@ export default function Home() {
                           >
                             <Trash2 size={18} strokeWidth={2.5} />
                           </button>
-                          <button
-                            onClick={handleEdit}
-                            className="rounded-lg p-2 transition hover:opacity-80"
-                            style={{ backgroundColor: 'var(--color-accent)' }}
-                          >
-                            <Edit size={18} strokeWidth={2.5} />
-                          </button>
                         </>
+                      )}
+                      {myPost && !editing && (
+                        <button
+                          onClick={() => setTagSelectorOpen(true)}
+                          className="rounded-lg p-2 transition hover:opacity-80"
+                          style={{ backgroundColor: 'var(--color-accent)' }}
+                        >
+                          <Settings size={18} strokeWidth={2.5} />
+                        </button>
+                      )}
+                      {myPost && !editing && (
+                        <button
+                          onClick={handleEdit}
+                          className="rounded-lg p-2 transition hover:opacity-80"
+                          style={{ backgroundColor: 'var(--color-accent)' }}
+                        >
+                          <Edit size={18} strokeWidth={2.5} />
+                        </button>
                       )}
                       {editing && (
                         <button
@@ -615,6 +745,12 @@ export default function Home() {
                     <Heart size={14} strokeWidth={2} className="text-red-400" fill="#f87171" />
                     <NumberFlow value={postLikes} suffix={` like${postLikes !== 1 ? 's' : ''}`} />
                   </div>
+                  <TagSelectorModal
+                    open={tagSelectorOpen}
+                    onClose={() => setTagSelectorOpen(false)}
+                    selected={selectedTagNames}
+                    onSave={handleSaveTags}
+                  />
                 </div>
               </div>
             ) : view === 'notifications' ? (
@@ -785,7 +921,111 @@ export default function Home() {
         </div>
       )}
 
-      <VoiceCall ref={voiceCallRef} profile={profile} />
+      {preferencesOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => setPreferencesOpen(false)}>
+          <div
+            className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-center p-4 border-b border-zinc-800 relative">
+              <h2 className="text-zinc-100 font-semibold text-lg">Preferencias</h2>
+              <button onClick={() => setPreferencesOpen(false)} className="absolute right-4 text-zinc-400 hover:text-zinc-200 transition p-1">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              {prefTagNames.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {prefTagNames.map(name => (
+                    <span key={name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-sm font-medium text-zinc-200 bg-zinc-700">
+                      <span>#{name}</span>
+                      <button
+                        onClick={() => setPrefTagNames(prev => prev.filter(t => t !== name))}
+                        className="hover:text-zinc-100 ml-0.5"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <input
+                value={prefSearch}
+                onChange={e => setPrefSearch(e.target.value)}
+                placeholder="Buscar etiquetas..."
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none"
+              />
+              <div className="max-h-[40vh] overflow-y-auto space-y-1">
+                {!prefSearch ? (
+                  <div className="space-y-1">
+                    {allTags.slice(0, 5).map(tag => (
+                      <button
+                        key={tag.id}
+                        onClick={() => {
+                          if (prefTagNames.includes(tag.name)) {
+                            setPrefTagNames(prev => prev.filter(t => t !== tag.name))
+                          } else if (prefTagNames.length < 5) {
+                            setPrefTagNames(prev => [...prev, tag.name])
+                          }
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition ${
+                          prefTagNames.includes(tag.name)
+                            ? 'bg-zinc-700 text-zinc-100'
+                            : 'text-zinc-300 hover:bg-zinc-800'
+                        }`}
+                      >
+                        <span>#{tag.name}</span>
+                        <span className="text-zinc-500 text-xs">{tag.post_count} posts</span>
+                      </button>
+                    ))}
+                    {allTags.length > 5 && (
+                      <p className="text-zinc-500 text-xs text-center pt-2">Buscá más etiquetas</p>
+                    )}
+                  </div>
+                ) : (() => {
+                  const filtered = allTags.filter(t => t.name.includes(prefSearch.toLowerCase()))
+                  return filtered.length === 0 ? (
+                    <p className="text-zinc-500 text-sm text-center py-4">No hay etiquetas con ese nombre</p>
+                  ) : (
+                    filtered.map(tag => (
+                      <button
+                        key={tag.id}
+                        onClick={() => {
+                          if (prefTagNames.includes(tag.name)) {
+                            setPrefTagNames(prev => prev.filter(t => t !== tag.name))
+                          } else if (prefTagNames.length < 5) {
+                            setPrefTagNames(prev => [...prev, tag.name])
+                          }
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition ${
+                          prefTagNames.includes(tag.name)
+                            ? 'bg-zinc-700 text-zinc-100'
+                            : 'text-zinc-300 hover:bg-zinc-800'
+                        }`}
+                      >
+                        <span>#{tag.name}</span>
+                        <span className="text-zinc-500 text-xs">{tag.post_count} posts</span>
+                      </button>
+                    ))
+                  )
+                })()}
+              </div>
+              <div className="flex justify-center pt-2">
+                <button
+                  onClick={handleSavePreferences}
+                  disabled={savingPrefs}
+                  className="px-4 py-2 rounded-lg text-sm text-white transition hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--color-accent)' }}
+                >
+                  {savingPrefs ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <VoiceCall ref={voiceCallRef} />
     </div>
   )
 }
