@@ -5,6 +5,7 @@ let io
 const onlineUsers = new Set()
 const inCall = new Set()
 const callPairs = new Map()
+const pendingCalls = new Map()
 
 export function setupSocket(server) {
   io = new Server(server, {
@@ -94,7 +95,7 @@ export function setupSocket(server) {
           return
         }
 
-        if (inCall.has(targetUserId) || inCall.has(socket.user.id)) {
+        if (inCall.has(socket.user.id)) {
           io.to(socket.user.id).emit('call:busy', { targetUserId })
           return
         }
@@ -107,9 +108,7 @@ export function setupSocket(server) {
           .eq('id', socket.user.id)
           .maybeSingle()
 
-        inCall.add(socket.user.id)
-        callPairs.set(socket.user.id, targetUserId)
-        callPairs.set(targetUserId, socket.user.id)
+        pendingCalls.set(socket.user.id, { targetUserId, sdp, createdAt: Date.now() })
         io.to(targetUserId).emit('signal:offer', {
           caller: {
             id: socket.user.id,
@@ -120,7 +119,7 @@ export function setupSocket(server) {
         })
       } catch (err) {
         console.error(err)
-        inCall.delete(socket.user.id)
+        pendingCalls.delete(socket.user.id)
         io.to(socket.user.id).emit('call:busy', { targetUserId: data?.targetUserId })
       }
     })
@@ -131,6 +130,10 @@ export function setupSocket(server) {
         if (!targetUserId || !sdp) return
 
         inCall.add(socket.user.id)
+        inCall.add(targetUserId)
+        callPairs.set(socket.user.id, targetUserId)
+        callPairs.set(targetUserId, socket.user.id)
+        pendingCalls.delete(targetUserId)
         io.to(targetUserId).emit('signal:answer', {
           sdp,
         })
@@ -163,6 +166,8 @@ export function setupSocket(server) {
         inCall.delete(targetUserId)
         callPairs.delete(socket.user.id)
         callPairs.delete(targetUserId)
+        pendingCalls.delete(socket.user.id)
+        pendingCalls.delete(targetUserId)
         if (targetUserId) {
           io.to(targetUserId).emit('call:end', {})
         }
@@ -183,6 +188,16 @@ export function setupSocket(server) {
         io.to(partnerId).emit('call:end', {})
       }
       callPairs.delete(socket.user.id)
+      const pendingTarget = pendingCalls.get(socket.user.id)
+      if (pendingTarget) {
+        io.to(pendingTarget.targetUserId).emit('call:end', {})
+      }
+      pendingCalls.delete(socket.user.id)
+      for (const [callerId, val] of pendingCalls) {
+        if (val.targetUserId === socket.user.id) {
+          pendingCalls.delete(callerId)
+        }
+      }
     })
   })
 
@@ -207,4 +222,25 @@ export function addToCall(userId) {
 
 export function removeFromCall(userId) {
   inCall.delete(userId)
+}
+
+export function setPendingCall(callerId, targetUserId, sdp) {
+  pendingCalls.set(callerId, { targetUserId, sdp, createdAt: Date.now() })
+}
+
+export function getPendingCall(callerId) {
+  return pendingCalls.get(callerId) || null
+}
+
+export function removePendingCall(callerId) {
+  pendingCalls.delete(callerId)
+}
+
+export function findPendingCallForTarget(targetUserId) {
+  for (const [callerId, val] of pendingCalls) {
+    if (val.targetUserId === targetUserId) {
+      return { callerId, ...val }
+    }
+  }
+  return null
 }

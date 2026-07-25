@@ -1,14 +1,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Phone, Send, Pencil, Trash2, X } from 'lucide-react'
+import { ChevronLeft, Phone, PhoneOff, Send, Pencil, Trash2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
 import { useOnlineUsers } from '../lib/OnlineUsersContext'
 import { timeAgo } from '../lib/timeAgo'
 
-export default function ChatConversation({ chat, onBack, profile, onStartCall }) {
+export default function ChatConversation({ chat, onBack, profile, onStartCall, incomingCall, onJoinCall, onClearIncomingCall }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { isOnline } = useOnlineUsers()
@@ -395,6 +395,39 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
           </button>
         )}
       </div>
+
+      {incomingCall && incomingCall.from.id === chat.otherUser?.id && (
+        <div className="flex items-center gap-3 mb-3 px-4 py-3 rounded-xl bg-zinc-800/50 border border-zinc-700">
+          <div className="relative">
+            <Avatar src={incomingCall.from.avatar_url} size={40} />
+            <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-zinc-100 text-sm font-medium">{incomingCall.from.username} te está llamando</p>
+            <p className="text-green-400 text-xs">Llamada entrante</p>
+          </div>
+          <button
+            onClick={() => onJoinCall?.(incomingCall.from, incomingCall.sdp)}
+            className="rounded-full p-2.5 bg-green-600 text-white hover:bg-green-700 transition shrink-0"
+            title="Unirse"
+          >
+            <Phone size={18} />
+          </button>
+          <button
+            onClick={() => {
+              api('/api/calls/end', {
+                method: 'POST',
+                body: JSON.stringify({ targetUserId: incomingCall.from.id }),
+              }).catch(() => {})
+              onClearIncomingCall?.()
+            }}
+            className="rounded-full p-2.5 bg-red-600 text-white hover:bg-red-700 transition shrink-0"
+            title="Rechazar"
+          >
+            <PhoneOff size={18} />
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto space-y-2 mb-4" data-messages-container>
         {isLoading ? (

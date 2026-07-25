@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useEffect, useState, useRef, useCallback } from 'react'
-import { Mic, MicOff, Phone, PhoneOff, X } from 'lucide-react'
+import { Mic, MicOff, PhoneOff } from 'lucide-react'
 import { socket } from '../lib/socket'
 import { api } from '../lib/api'
 import { createPeerConnection } from '../lib/webrtc'
@@ -19,8 +19,6 @@ const VoiceCall = forwardRef((props, ref) => {
   const pcRef = useRef(null)
   const localStreamRef = useRef(null)
   const remoteAudioRef = useRef(null)
-  const incomingOfferRef = useRef(null)
-  const timeoutRef = useRef(null)
   const remoteStreamRef = useRef(null)
   const pendingCandidatesRef = useRef([])
   const timerIntervalRef = useRef(null)
@@ -59,8 +57,6 @@ const VoiceCall = forwardRef((props, ref) => {
   }, [])
 
   const cleanup = useCallback(() => {
-    clearTimeout(timeoutRef.current)
-    timeoutRef.current = null
     clearInterval(timerIntervalRef.current)
     timerIntervalRef.current = null
     callStartTimeRef.current = null
@@ -77,20 +73,21 @@ const VoiceCall = forwardRef((props, ref) => {
     setIsMuted(false)
   }, [])
 
+  const resetState = useCallback(() => {
+    callStateRef.current = 'idle'
+    otherUserRef.current = null
+    setCallState('idle')
+    setOtherUser(null)
+    setError('')
+    setFinalDuration(0)
+    pendingCandidatesRef.current = []
+  }, [])
+
   const showError = useCallback((msg) => {
-    cleanup()
     setError(msg)
-    callStateRef.current = 'ended'
-    setCallState('ended')
-    setTimeout(() => {
-      callStateRef.current = 'idle'
-      otherUserRef.current = null
-      incomingOfferRef.current = null
-      setCallState('idle')
-      setOtherUser(null)
-      setError('')
-    }, 2000)
-  }, [cleanup])
+    cleanup()
+    setTimeout(resetState, 2000)
+  }, [cleanup, resetState])
 
   const toggleMute = useCallback(() => {
     const audioTracks = localStreamRef.current?.getAudioTracks()
@@ -113,29 +110,21 @@ const VoiceCall = forwardRef((props, ref) => {
       }).catch(() => {})
     }
     cleanup()
-    callStateRef.current = 'ended'
-    setCallState('ended')
-    setTimeout(() => {
-      callStateRef.current = 'idle'
-      otherUserRef.current = null
-      incomingOfferRef.current = null
-      setCallState('idle')
-      setOtherUser(null)
-      setError('')
-    }, 1500)
-  }, [cleanup, stopTimer])
+    resetState()
+  }, [cleanup, stopTimer, resetState])
 
   const startCall = useCallback(async (user) => {
     if (callStateRef.current !== 'idle') return
 
-    callStateRef.current = 'calling'
+    callStateRef.current = 'waiting'
     otherUserRef.current = user
     setOtherUser(user)
-    setCallState('calling')
+    setCallState('waiting')
     setError('')
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      if (callStateRef.current === 'idle') { cleanup(); return }
       localStreamRef.current = stream
 
       const pc = createPeerConnection()
@@ -151,10 +140,7 @@ const VoiceCall = forwardRef((props, ref) => {
 
       pc.ontrack = (e) => {
         remoteStreamRef.current = e.streams[0]
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = e.streams[0]
-          remoteAudioRef.current.play().catch(() => {})
-        }
+        syncRemoteAudio()
       }
 
       pc.oniceconnectionstatechange = () => {
@@ -163,36 +149,29 @@ const VoiceCall = forwardRef((props, ref) => {
             endCall()
           }
         } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-          clearTimeout(timeoutRef.current)
           callStateRef.current = 'connected'
           setCallState('connected')
-          startTimer()
+          if (!callStartTimeRef.current) startTimer()
         }
       }
 
+      if (callStateRef.current === 'idle') { cleanup(); return }
       const offer = await pc.createOffer()
+      if (callStateRef.current === 'idle') { cleanup(); return }
       await pc.setLocalDescription(offer)
+      if (callStateRef.current === 'idle') { cleanup(); return }
 
       const offerRes = await api('/api/calls/offer', {
         method: 'POST',
         body: JSON.stringify({ targetUserId: user.id, sdp: offer }),
       })
-      if (offerRes.status === 409 || offerRes.status === 404) {
+      if (callStateRef.current === 'idle') { cleanup(); return }
+      if (offerRes.status === 409) {
         const data = await offerRes.json().catch(() => ({}))
-        showError(data.message || 'El usuario no está disponible')
+        showError(data.message || 'Ya estás en una llamada')
         return
       }
       if (!offerRes.ok) throw new Error('Error al enviar la oferta')
-
-      timeoutRef.current = setTimeout(() => {
-        if (callStateRef.current === 'calling') {
-          api('/api/calls/missed', {
-            method: 'POST',
-            body: JSON.stringify({ targetUserId: otherUserRef.current?.id }),
-          }).catch(() => {})
-          showError('No se pudo conectar la llamada')
-        }
-      }, 30000)
     } catch (e) {
       if (e.name === 'NotAllowedError') {
         showError('Permiso de micrófono denegado')
@@ -200,31 +179,96 @@ const VoiceCall = forwardRef((props, ref) => {
         showError('Error al iniciar la llamada')
       }
     }
-  }, [endCall, cleanup, startTimer, showError])
+  }, [endCall, cleanup, startTimer, showError, syncRemoteAudio])
 
-  useImperativeHandle(ref, () => ({ startCall }), [startCall])
+  const joinCall = useCallback(async (callerUser, offerSdp) => {
+    if (callStateRef.current !== 'idle') return
+
+    callStateRef.current = 'joining'
+    otherUserRef.current = callerUser
+    setOtherUser(callerUser)
+    setCallState('joining')
+    setError('')
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      if (callStateRef.current === 'idle') { cleanup(); return }
+      localStreamRef.current = stream
+
+      const pc = createPeerConnection()
+      pcRef.current = pc
+
+      stream.getTracks().forEach(track => pc.addTrack(track, stream))
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate && otherUserRef.current) {
+          socket.emit('signal:ice-candidate', { targetUserId: otherUserRef.current.id, candidate: e.candidate })
+        }
+      }
+
+      pc.ontrack = (e) => {
+        remoteStreamRef.current = e.streams[0]
+        syncRemoteAudio()
+      }
+
+      pc.oniceconnectionstatechange = () => {
+        if (pc.iceConnectionState === 'failed') {
+          if (callStateRef.current !== 'idle') {
+            endCall()
+          }
+        } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          callStateRef.current = 'connected'
+          setCallState('connected')
+          if (!callStartTimeRef.current) startTimer()
+        }
+      }
+
+      if (callStateRef.current === 'idle') { cleanup(); return }
+      await pc.setRemoteDescription(new RTCSessionDescription(offerSdp))
+      if (callStateRef.current === 'idle') { cleanup(); return }
+      const answer = await pc.createAnswer()
+      if (callStateRef.current === 'idle') { cleanup(); return }
+      await pc.setLocalDescription(answer)
+      if (callStateRef.current === 'idle') { cleanup(); return }
+
+      for (const c of pendingCandidatesRef.current) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(c)) } catch (err) { console.error(err) }
+      }
+      pendingCandidatesRef.current = []
+
+      const answerRes = await api('/api/calls/answer', {
+        method: 'POST',
+        body: JSON.stringify({ targetUserId: callerUser.id, sdp: answer }),
+      })
+      if (callStateRef.current === 'idle') { cleanup(); return }
+      if (answerRes.status === 404) {
+        showError('La llamada ya no está disponible')
+        return
+      }
+      if (!answerRes.ok) throw new Error('Error al aceptar la llamada')
+
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        if (!callStartTimeRef.current) startTimer()
+      }
+    } catch (e) {
+      if (e.name === 'NotAllowedError') {
+        showError('Permiso de micrófono denegado')
+      } else {
+        showError('Error al unirse a la llamada')
+      }
+    }
+  }, [endCall, cleanup, startTimer, showError, syncRemoteAudio])
+
+  useImperativeHandle(ref, () => ({ startCall, joinCall }), [startCall, joinCall])
 
   useEffect(() => {
     syncRemoteAudio()
   })
 
   useEffect(() => {
-    const handleOffer = (data) => {
-      if (callStateRef.current !== 'idle') {
-        socket.emit('call:busy', { targetUserId: data.caller.id })
-        return
-      }
-
-      callStateRef.current = 'ringing'
-      otherUserRef.current = data.caller
-      incomingOfferRef.current = data.sdp
-      setOtherUser(data.caller)
-      setCallState('ringing')
-      setError('')
-    }
-
     const handleAnswer = async (data) => {
-      if (pcRef.current && data.sdp) {
+      if (pcRef.current && data.sdp && callStateRef.current === 'waiting') {
+        if (pcRef.current.signalingState !== 'have-local-offer') return
         try {
           await pcRef.current.setRemoteDescription(new RTCSessionDescription(data.sdp))
           for (const c of pendingCandidatesRef.current) {
@@ -244,188 +288,54 @@ const VoiceCall = forwardRef((props, ref) => {
     }
 
     const handleIceCandidate = async (data) => {
-      if (pcRef.current && data.candidate) {
-        if (pcRef.current.currentRemoteDescription) {
-          try {
-            await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate))
-          } catch (err) { console.error(err) }
-        } else {
-          pendingCandidatesRef.current.push(data.candidate)
-        }
+      if (!data.candidate) return
+      if (pcRef.current?.currentRemoteDescription) {
+        try {
+          await pcRef.current.addIceCandidate(new RTCIceCandidate(data.candidate))
+        } catch (err) { console.error(err) }
+      } else {
+        pendingCandidatesRef.current.push(data.candidate)
       }
     }
 
     const handleEnd = () => {
+      if (callStateRef.current === 'idle') return
       stopTimer()
       cleanup()
-      callStateRef.current = 'ended'
-      setCallState('ended')
-      setTimeout(() => {
-        callStateRef.current = 'idle'
-        otherUserRef.current = null
-        incomingOfferRef.current = null
-        setCallState('idle')
-        setOtherUser(null)
-        setError('')
-      }, 1500)
-    }
-
-    const handleBusy = () => {
-      api('/api/calls/missed', {
-        method: 'POST',
-        body: JSON.stringify({ targetUserId: otherUserRef.current?.id }),
-      }).catch(() => {})
-      showError('El usuario está ocupado')
-    }
-
-    const handleAck = () => {
-      clearTimeout(timeoutRef.current)
-      timeoutRef.current = setTimeout(() => {
-        if (callStateRef.current === 'calling') {
-          api('/api/calls/missed', {
-            method: 'POST',
-            body: JSON.stringify({ targetUserId: otherUserRef.current?.id }),
-          }).catch(() => {})
-          showError('El usuario no respondió')
-        }
-      }, 60000)
-    }
-
-    const handleDebug = (data) => {
-      if (data?.error === 'missing_params') {
-        showError('Error al enviar la oferta (params)')
-      }
+      resetState()
     }
 
     const handleRemoteMute = (data) => {
       setRemoteMuted(data.muted)
     }
 
-    socket.on('signal:offer', handleOffer)
     socket.on('signal:answer', handleAnswer)
     socket.on('signal:ice-candidate', handleIceCandidate)
     socket.on('call:end', handleEnd)
-    socket.on('call:busy', handleBusy)
-    socket.on('call:ack', handleAck)
-    socket.on('call:debug', handleDebug)
     socket.on('call:mute', handleRemoteMute)
 
     return () => {
-      socket.off('signal:offer', handleOffer)
       socket.off('signal:answer', handleAnswer)
       socket.off('signal:ice-candidate', handleIceCandidate)
       socket.off('call:end', handleEnd)
-      socket.off('call:busy', handleBusy)
-      socket.off('call:ack', handleAck)
-      socket.off('call:debug', handleDebug)
       socket.off('call:mute', handleRemoteMute)
       cleanup()
     }
-    }, [cleanup, endCall, syncRemoteAudio, showError])
-
-  const handleAcceptCall = async () => {
-    if (!otherUserRef.current || !incomingOfferRef.current) return
-
-    callStateRef.current = 'calling'
-    setCallState('calling')
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-      localStreamRef.current = stream
-
-      const pc = createPeerConnection()
-      pcRef.current = pc
-
-      stream.getTracks().forEach(track => pc.addTrack(track, stream))
-
-      pc.onicecandidate = (e) => {
-        if (e.candidate && otherUserRef.current) {
-          socket.emit('signal:ice-candidate', { targetUserId: otherUserRef.current.id, candidate: e.candidate })
-        }
-      }
-
-      pc.ontrack = (e) => {
-        remoteStreamRef.current = e.streams[0]
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = e.streams[0]
-          remoteAudioRef.current.play().catch(() => {})
-        }
-      }
-
-      pc.oniceconnectionstatechange = () => {
-        if (pc.iceConnectionState === 'failed') {
-          if (callStateRef.current !== 'idle') {
-            endCall()
-          }
-        } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-          clearTimeout(timeoutRef.current)
-          callStateRef.current = 'connected'
-          setCallState('connected')
-          if (!callStartTimeRef.current) startTimer()
-        }
-      }
-
-      await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current))
-      const answer = await pc.createAnswer()
-      await pc.setLocalDescription(answer)
-
-      for (const c of pendingCandidatesRef.current) {
-        try { await pc.addIceCandidate(new RTCIceCandidate(c)) } catch (err) { console.error(err) }
-      }
-      pendingCandidatesRef.current = []
-
-      await api('/api/calls/answer', {
-        method: 'POST',
-        body: JSON.stringify({ targetUserId: otherUserRef.current.id, sdp: answer }),
-      })
-
-      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-        if (!callStartTimeRef.current) startTimer()
-      } else {
-        timeoutRef.current = setTimeout(() => {
-          if (callStateRef.current !== 'idle') {
-            endCall()
-          }
-        }, 15000)
-      }
-    } catch (e) {
-      if (e.name === 'NotAllowedError') {
-        setError('Permiso de micrófono denegado')
-      } else {
-        setError('Error al aceptar la llamada')
-      }
-      endCall()
-    }
-  }
-
-  const handleRejectCall = () => {
-    if (otherUserRef.current) {
-      api('/api/calls/end', {
-        method: 'POST',
-        body: JSON.stringify({ targetUserId: otherUserRef.current.id }),
-      }).catch(() => {})
-    }
-    cleanup()
-    callStateRef.current = 'idle'
-    otherUserRef.current = null
-    incomingOfferRef.current = null
-    setCallState('idle')
-    setOtherUser(null)
-    setError('')
-  }
+  }, [cleanup, endCall, resetState, stopTimer])
 
   if (callState === 'idle') return null
 
   return (
     <>
       <audio ref={remoteAudioRef} autoPlay playsInline />
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-        <div className="bg-zinc-900 rounded-2xl p-8 w-80 flex flex-col items-center gap-6 shadow-2xl">
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/70" />
+        <div className="relative bg-zinc-900 rounded-2xl p-8 w-80 flex flex-col items-center gap-4 shadow-2xl">
           <Avatar src={otherUser?.avatar_url} size={80} />
 
           <p className="text-zinc-100 text-lg font-medium">{otherUser?.username}</p>
 
-          {remoteMuted && (
+          {remoteMuted && callState === 'connected' && (
             <div className="flex items-center gap-1.5 text-zinc-400 text-xs -mt-3">
               <MicOff size={14} />
               <span>Silenciado</span>
@@ -436,35 +346,39 @@ const VoiceCall = forwardRef((props, ref) => {
             <p className="text-red-400 text-sm text-center">{error}</p>
           )}
 
-          {callState === 'calling' && (
+          {callState === 'waiting' && (
             <>
-              <p className="text-zinc-400 text-sm">Llamando...</p>
+              <p className="text-zinc-400 text-sm">Esperando que {(otherUser?.username || '').replace(/^@/, '').split(' ')[0] || 'el usuario'} se una...</p>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={toggleMute}
+                  className={`rounded-full p-4 transition ${
+                    isMuted
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
+                  }`}
+                >
+                  {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
+                </button>
+                <button
+                  onClick={endCall}
+                  className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
+                >
+                  <PhoneOff size={24} />
+                </button>
+              </div>
+            </>
+          )}
+
+          {callState === 'joining' && (
+            <>
+              <p className="text-zinc-400 text-sm">Conectando...</p>
               <button
                 onClick={endCall}
                 className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
               >
                 <PhoneOff size={24} />
               </button>
-            </>
-          )}
-
-          {callState === 'ringing' && (
-            <>
-              <p className="text-zinc-400 text-sm animate-pulse">Llamada entrante...</p>
-              <div className="flex items-center gap-6">
-                <button
-                  onClick={handleAcceptCall}
-                  className="rounded-full p-4 bg-green-600 text-white hover:bg-green-700 transition"
-                >
-                  <Phone size={24} />
-                </button>
-                <button
-                  onClick={handleRejectCall}
-                  className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
-                >
-                  <X size={24} />
-                </button>
-              </div>
             </>
           )}
 
@@ -496,20 +410,7 @@ const VoiceCall = forwardRef((props, ref) => {
             </>
           )}
 
-          {callState === 'ended' && (
-            <div className="flex flex-col items-center gap-1">
-              {error ? (
-                <p className="text-red-400 text-sm text-center">{error}</p>
-              ) : (
-                <>
-                  <p className="text-zinc-400 text-sm">Llamada finalizada</p>
-                  {finalDuration > 0 && (
-                    <p className="text-zinc-500 text-xs font-mono tabular-nums">Duración: {formatDuration(finalDuration)}</p>
-                  )}
-                </>
-              )}
-            </div>
-          )}
+          {callState === 'ended' && null}
         </div>
       </div>
     </>

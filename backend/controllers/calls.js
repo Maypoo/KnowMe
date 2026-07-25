@@ -1,8 +1,6 @@
 import { supabase } from '../lib/supabase.js'
 import asyncHandler from '../middleware/asyncHandler.js'
-import { sanitize } from '../lib/utils.js'
-import { getIO, isInCall, addToCall, removeFromCall } from '../src/socket.js'
-import { insertMissedCall } from '../lib/chat.js'
+import { getIO, isInCall, addToCall, removeFromCall, setPendingCall, getPendingCall, removePendingCall } from '../src/socket.js'
 
 export const offer = asyncHandler(async (req, res) => {
   const { targetUserId, sdp } = req.body
@@ -10,9 +8,8 @@ export const offer = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Parámetros requeridos' })
   }
 
-  if (isInCall(targetUserId)) {
-    await insertMissedCall(req.user.id, targetUserId)
-    return res.status(409).json({ error: 'user_busy', message: 'El usuario está en otra llamada' })
+  if (isInCall(req.user.id)) {
+    return res.status(409).json({ error: 'user_busy', message: 'Ya estás en una llamada' })
   }
 
   const io = getIO()
@@ -20,13 +17,7 @@ export const offer = asyncHandler(async (req, res) => {
     return res.status(500).json({ error: 'Socket no disponible' })
   }
 
-  const targetSockets = await io.in(targetUserId).fetchSockets()
-  if (targetSockets.length === 0) {
-    await insertMissedCall(req.user.id, targetUserId)
-    return res.status(404).json({ error: 'user_offline', message: 'El usuario no está disponible' })
-  }
-
-  addToCall(req.user.id)
+  setPendingCall(req.user.id, targetUserId, sdp)
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -54,7 +45,14 @@ export const answer = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Parámetros requeridos' })
   }
 
+  const pending = getPendingCall(targetUserId)
+  if (!pending) {
+    return res.status(404).json({ error: 'no_pending_call', message: 'No hay una llamada pendiente de ese usuario' })
+  }
+
   addToCall(req.user.id)
+  addToCall(targetUserId)
+  removePendingCall(targetUserId)
 
   const io = getIO()
   if (io) {
@@ -86,6 +84,8 @@ export const end = asyncHandler(async (req, res) => {
 
   removeFromCall(req.user.id)
   removeFromCall(targetUserId)
+  removePendingCall(req.user.id)
+  removePendingCall(targetUserId)
 
   const io = getIO()
   if (io) {
@@ -95,12 +95,30 @@ export const end = asyncHandler(async (req, res) => {
   res.json({ sent: true })
 })
 
-export const missed = asyncHandler(async (req, res) => {
-  const { targetUserId } = req.body
-  if (!targetUserId) {
-    return res.status(400).json({ error: 'targetUserId requerido' })
+export const pending = asyncHandler(async (req, res) => {
+  const { callerUserId } = req.params
+  if (!callerUserId) {
+    return res.status(400).json({ error: 'callerUserId requerido' })
   }
 
-  await insertMissedCall(req.user.id, targetUserId)
-  res.json({ sent: true })
+  const pending = getPendingCall(callerUserId)
+  if (!pending || pending.targetUserId !== req.user.id) {
+    return res.json({ pending: false })
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('username, display_name, avatar_url')
+    .eq('id', callerUserId)
+    .maybeSingle()
+
+  res.json({
+    pending: true,
+    caller: {
+      id: callerUserId,
+      username: profile?.display_name || profile?.username || 'Desconocido',
+      avatar_url: profile?.avatar_url || null,
+    },
+    sdp: pending.sdp,
+  })
 })

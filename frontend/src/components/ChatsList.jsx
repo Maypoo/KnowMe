@@ -1,11 +1,64 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Phone } from 'lucide-react'
 import { api } from '../lib/api'
+import { socket } from '../lib/socket'
 import Avatar from './Avatar'
 import { SkeletonBox, SkeletonAvatar } from './Skeleton'
 import { useOnlineUsers } from '../lib/OnlineUsersContext'
 
-export default function ChatsList({ onSelectChat }) {
+export default function ChatsList({ onSelectChat, incomingCall }) {
+  const queryClient = useQueryClient()
   const { isOnline } = useOnlineUsers()
+  const [typingChats, setTypingChats] = useState({})
+  const typingTimeoutsRef = useRef({})
+
+  function clearTyping(chatId) {
+    setTypingChats(prev => {
+      const next = { ...prev }
+      delete next[chatId]
+      return next
+    })
+    if (typingTimeoutsRef.current[chatId]) {
+      clearTimeout(typingTimeoutsRef.current[chatId])
+      delete typingTimeoutsRef.current[chatId]
+    }
+  }
+
+  useEffect(() => {
+    const handleTyping = ({ userId, chatId }) => {
+      if (!chatId) return
+      setTypingChats(prev => ({ ...prev, [chatId]: true }))
+      if (typingTimeoutsRef.current[chatId]) {
+        clearTimeout(typingTimeoutsRef.current[chatId])
+      }
+      typingTimeoutsRef.current[chatId] = setTimeout(() => {
+        clearTyping(chatId)
+      }, 3000)
+    }
+
+    const handleNewMessage = (data) => {
+      if (!data?.chatId) return
+      clearTyping(data.chatId)
+      queryClient.setQueryData(['chats'], (old) => {
+        if (!old) return old
+        return old.map(c =>
+          c.id === data.chatId
+            ? { ...c, lastMessage: data.message, updatedAt: data.message.created_at }
+            : c
+        )
+      })
+    }
+
+    socket.on('chat:typing', handleTyping)
+    socket.on('new_message', handleNewMessage)
+    return () => {
+      socket.off('chat:typing', handleTyping)
+      socket.off('new_message', handleNewMessage)
+      Object.values(typingTimeoutsRef.current).forEach(clearTimeout)
+    }
+  }, [queryClient])
+
   const { data: chats = [], isLoading } = useQuery({
     queryKey: ['chats'],
     queryFn: async () => {
@@ -67,6 +120,19 @@ export default function ChatsList({ onSelectChat }) {
                         {chat.otherUser?.username || 'Desconocido'}
                       </span>
                       <div className="flex items-center gap-2">
+                        {incomingCall && incomingCall.from.id === chat.otherUser?.id && (
+                          <span
+                            className="rounded-full flex items-center justify-center"
+                            style={{
+                              backgroundColor: '#22c55e',
+                              color: '#fff',
+                              width: 18,
+                              height: 18,
+                            }}
+                          >
+                            <Phone size={11} strokeWidth={3} />
+                          </span>
+                        )}
                         {chat.unreadCount > 0 && (
                           <span
                             className="rounded-full text-[11px] font-medium flex items-center justify-center"
@@ -89,9 +155,11 @@ export default function ChatsList({ onSelectChat }) {
                       </div>
                     </div>
                     <p className="text-zinc-500 text-sm truncate">
-                      {chat.lastMessage
-                        ? (chat.lastMessage.sender_id !== chat.otherUser?.id ? 'Tú: ' : '') + chat.lastMessage.content
-                        : 'Sin mensajes aún'}
+                      {typingChats[chat.id] && isOnline(chat.otherUser?.id)
+                        ? <span className="text-green-400">escribiendo...</span>
+                        : chat.lastMessage
+                          ? (chat.lastMessage.sender_id !== chat.otherUser?.id ? 'Tú: ' : '') + chat.lastMessage.content
+                          : 'Sin mensajes aún'}
                     </p>
                   </div>
                 </button>

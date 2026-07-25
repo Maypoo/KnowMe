@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import NumberFlow from '@number-flow/react'
-import { ArrowLeft, Search, X, Plus, User, Home as HomeIcon, Users, Send, Bell, Edit, Heart, Trash2, Settings } from 'lucide-react'
+import { ArrowLeft, Search, X, Plus, User, Home as HomeIcon, Users, Send, Bell, Edit, Heart, Trash2, Settings, Phone } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from '../components/Avatar'
@@ -77,6 +77,8 @@ export default function Home() {
   const voiceCallRef = useRef(null)
   const viewRef = useRef(view)
   useEffect(() => { viewRef.current = view }, [view])
+  const [incomingCall, setIncomingCall] = useState(null)
+  const [incomingCallSeen, setIncomingCallSeen] = useState(false)
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -160,6 +162,16 @@ export default function Home() {
       }
     }
 
+    const handleIncomingCall = (data) => {
+      setIncomingCall({ from: data.caller, sdp: data.sdp })
+      setIncomingCallSeen(activeChat?.otherUser?.id === data.caller.id)
+    }
+
+    const handleCallEnd = () => {
+      setIncomingCall(null)
+      setIncomingCallSeen(false)
+    }
+
     socket.on('friend_request_received', handleRequestReceived)
     socket.on('friend_request_updated', handleRequestUpdated)
     socket.on('friend_request_cancelled', handleRequestCancelled)
@@ -169,6 +181,8 @@ export default function Home() {
     socket.on('notifications_cleared', handleNotificationsCleared)
     socket.on('messages_read', handleMessagesRead)
     socket.on('connect', handleReconnect)
+    socket.on('signal:offer', handleIncomingCall)
+    socket.on('call:end', handleCallEnd)
 
     return () => {
       socket.off('friend_request_received', handleRequestReceived)
@@ -180,6 +194,8 @@ export default function Home() {
       socket.off('notifications_cleared', handleNotificationsCleared)
       socket.off('messages_read', handleMessagesRead)
       socket.off('connect', handleReconnect)
+      socket.off('signal:offer', handleIncomingCall)
+      socket.off('call:end', handleCallEnd)
     }
   }, [profile, activeChat])
 
@@ -291,6 +307,9 @@ export default function Home() {
   const handleSelectChat = (chat) => {
     setActiveChat(chat)
     setChatsView('list')
+    if (incomingCall && chat.otherUser?.id === incomingCall.from.id) {
+      setIncomingCallSeen(true)
+    }
   }
 
   const handleNewChat = () => {
@@ -760,7 +779,7 @@ export default function Home() {
                 {chatsView === 'new' ? (
                   <NewChat onSelectFriend={handleSelectFriend} onBack={handleBackFromNewChat} />
                 ) : activeChat ? (
-                  <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} />
+                  <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} incomingCall={incomingCall} onJoinCall={(callerUser, sdp) => { setIncomingCall(null); setIncomingCallSeen(false); voiceCallRef.current?.joinCall(callerUser, sdp) }} onClearIncomingCall={() => { setIncomingCall(null); setIncomingCallSeen(false) }} />
                 ) : (
                   <section className="flex-1 flex flex-col min-h-0">
                     <div className="flex items-center justify-between mb-4">
@@ -775,6 +794,7 @@ export default function Home() {
                     </div>
                     <ChatsList
                       onSelectChat={handleSelectChat}
+                      incomingCall={incomingCall}
                     />
                   </section>
                 )}
@@ -874,9 +894,22 @@ export default function Home() {
                 setChatsView('list')
               }}
               className={`relative transition ${view === 'chats' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
+              style={incomingCall && !incomingCallSeen ? { color: '#22c55e' } : undefined}
             >
               <Send size={24} />
-              {unreadTotal > 0 && (
+              {incomingCall && !incomingCallSeen ? (
+                <span
+                  className="absolute -top-1.5 -right-1.5 rounded-full flex items-center justify-center"
+                  style={{
+                    backgroundColor: '#22c55e',
+                    color: '#fff',
+                    width: 18,
+                    height: 18,
+                  }}
+                >
+                  <Phone size={11} strokeWidth={3} />
+                </span>
+              ) : unreadTotal > 0 ? (
                 <span
                   className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
                   style={{
@@ -889,7 +922,7 @@ export default function Home() {
                 >
                   {unreadTotal > 99 ? '99+' : unreadTotal}
                 </span>
-              )}
+              ) : null}
             </button>
           </div>
         </div>
