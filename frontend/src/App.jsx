@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
+import { OnlineUsersProvider } from './lib/OnlineUsersContext'
 import Login from './pages/Login'
 import Home from './pages/Home'
 import AuthCallback from './pages/AuthCallback'
@@ -28,6 +29,7 @@ function NotFound() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <OnlineUsersProvider>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
@@ -37,6 +39,7 @@ export default function App() {
         <Route path="/:username" element={<PublicProfile />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </OnlineUsersProvider>
     </QueryClientProvider>
   )
 }

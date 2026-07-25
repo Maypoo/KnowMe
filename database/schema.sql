@@ -9,7 +9,9 @@ create table profiles (
   show_age boolean default false,
   country text,
   show_country boolean default false,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  last_seen_at timestamptz,
+  show_activity boolean default true
 );
 
 alter table profiles enable row level security;

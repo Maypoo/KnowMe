@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import { useOnlineUsers } from '../lib/OnlineUsersContext'
+import { timeAgo } from '../lib/timeAgo'
 import Avatar from './Avatar'
 import { SkeletonBox, SkeletonAvatar } from './Skeleton'
 
 export default function FriendsList() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { isOnline } = useOnlineUsers()
   const [search, setSearch] = useState('')
   const [confirming, setConfirming] = useState(null)
 
@@ -84,8 +87,22 @@ export default function FriendsList() {
               {filtered.map(f => (
                 <li key={f.id} className="bg-zinc-900 rounded-lg px-4 py-3 flex items-center justify-between">
                   <button onClick={() => navigate(`/${f.username}`)} className="flex items-center gap-3 hover:opacity-80 transition">
-                    <Avatar src={f.avatar_url} size={32} />
-                    <span className="text-zinc-100 text-sm">{f.username}</span>
+                    <div className="relative">
+                      <Avatar src={f.avatar_url} size={32} />
+                      {isOnline(f.id) ? (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-zinc-900" />
+                      ) : f.last_seen_at ? (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-zinc-600 ring-2 ring-zinc-900" />
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col items-start">
+                      <span className="text-zinc-100 text-sm">{f.username}</span>
+                      {isOnline(f.id) ? (
+                        <span className="text-green-500 text-xs">En línea</span>
+                      ) : f.last_seen_at ? (
+                        <span className="text-zinc-500 text-xs">Conectado {timeAgo(f.last_seen_at)}</span>
+                      ) : null}
+                    </div>
                   </button>
                   <button
                     onClick={() => setConfirming(f)}

@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { sanitize, escapeILike, withDisplayName } from '../lib/utils.js'
 import { getUsernameChangeLimits, uploadAvatar } from '../lib/profile.js'
+import { getIO, isUserOnline } from '../src/socket.js'
 
 export const getByUsername = asyncHandler(async (req, res) => {
   const { username } = req.params
@@ -62,7 +63,7 @@ export const getByUsername = asyncHandler(async (req, res) => {
 })
 
 export const update = asyncHandler(async (req, res) => {
-  const { bio, display_name, username, birth_date, show_age, country, show_country } = req.body
+  const { bio, display_name, username, birth_date, show_age, country, show_country, show_activity } = req.body
 
   const updates = {}
   let oldUsername
@@ -94,6 +95,10 @@ export const update = asyncHandler(async (req, res) => {
 
   if (show_country !== undefined) {
     updates.show_country = Boolean(show_country)
+  }
+
+  if (show_activity !== undefined) {
+    updates.show_activity = Boolean(show_activity)
   }
 
   if (username !== undefined) {
@@ -200,6 +205,17 @@ export const update = asyncHandler(async (req, res) => {
     .select('*', { count: 'exact', head: true })
     .eq('status', 'accepted')
     .or(`sender_id.eq.${profile.id},receiver_id.eq.${profile.id}`)
+
+  if (updates.show_activity !== undefined) {
+    const io = getIO()
+    if (io && isUserOnline(req.user.id)) {
+      if (updates.show_activity) {
+        io.emit('user:online', { userId: req.user.id })
+      } else {
+        io.emit('user:offline', { userId: req.user.id })
+      }
+    }
+  }
 
   const finalLimits = await getUsernameChangeLimits(req.user.id)
 

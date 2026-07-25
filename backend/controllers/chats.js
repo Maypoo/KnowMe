@@ -69,13 +69,13 @@ export const list = asyncHandler(async (req, res) => {
 
   const { data: otherProfiles } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url')
+    .select('id, username, display_name, avatar_url, last_seen_at, show_activity')
     .in('id', otherUserIds)
 
   const profileMap = {}
   if (otherProfiles) {
     for (const p of otherProfiles) {
-      profileMap[p.id] = { id: p.id, username: sanitize(p.display_name || p.username), avatar_url: p.avatar_url }
+      profileMap[p.id] = { id: p.id, username: sanitize(p.display_name || p.username), avatar_url: p.avatar_url, last_seen_at: p.show_activity ? p.last_seen_at : null }
     }
   }
 
@@ -158,7 +158,7 @@ export const create = asyncHandler(async (req, res) => {
   if (existingChatId) {
     const { data: otherProfile } = await supabase
       .from('profiles')
-      .select('username, display_name, avatar_url')
+      .select('username, display_name, avatar_url, last_seen_at, show_activity')
       .eq('id', otherUserId)
       .maybeSingle()
 
@@ -169,6 +169,7 @@ export const create = asyncHandler(async (req, res) => {
           id: otherUserId,
           username: sanitize(otherProfile?.display_name || otherProfile?.username || 'Desconocido'),
           avatar_url: otherProfile?.avatar_url || null,
+          last_seen_at: otherProfile?.show_activity ? otherProfile?.last_seen_at : null,
         },
       },
     })
@@ -200,7 +201,7 @@ export const create = asyncHandler(async (req, res) => {
 
   const { data: otherProfile } = await supabase
     .from('profiles')
-    .select('username, display_name, avatar_url')
+    .select('username, display_name, avatar_url, last_seen_at, show_activity')
     .eq('id', otherUserId)
     .maybeSingle()
 
@@ -210,6 +211,7 @@ export const create = asyncHandler(async (req, res) => {
       id: otherUserId,
       username: sanitize(otherProfile?.display_name || otherProfile?.username || 'Desconocido'),
       avatar_url: otherProfile?.avatar_url || null,
+      last_seen_at: otherProfile?.show_activity ? otherProfile?.last_seen_at : null,
     },
   }
 
@@ -217,7 +219,7 @@ export const create = asyncHandler(async (req, res) => {
   if (io) {
     const { data: myProfile } = await supabase
       .from('profiles')
-      .select('username, display_name, avatar_url')
+      .select('username, display_name, avatar_url, last_seen_at, show_activity')
       .eq('id', req.user.id)
       .maybeSingle()
 
@@ -228,6 +230,7 @@ export const create = asyncHandler(async (req, res) => {
           id: req.user.id,
           username: sanitize(myProfile?.display_name || myProfile?.username || 'Desconocido'),
           avatar_url: myProfile?.avatar_url || null,
+          last_seen_at: myProfile?.show_activity ? myProfile?.last_seen_at : null,
         },
         lastMessage: null,
       },

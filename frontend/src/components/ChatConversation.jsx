@@ -1,18 +1,24 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, Phone, Send } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
+import { useOnlineUsers } from '../lib/OnlineUsersContext'
+import { timeAgo } from '../lib/timeAgo'
 
 export default function ChatConversation({ chat, onBack, profile, onStartCall }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { isOnline } = useOnlineUsers()
   const [input, setInput] = useState('')
   const [error, setError] = useState('')
   const [isFriend, setIsFriend] = useState(chat.isFriend ?? true)
   const [friendRequestSent, setFriendRequestSent] = useState(false)
+  const [typingUserId, setTypingUserId] = useState(null)
+  const typingTimeoutRef = useRef(null)
+  const lastTypingEmitRef = useRef(0)
   const bottomRef = useRef(null)
 
   const { data, isLoading } = useQuery({
@@ -87,6 +93,32 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
     socket.on('new_message', handleNewMessage)
     return () => socket.off('new_message', handleNewMessage)
   }, [chat.id, queryClient])
+
+  const otherUserId = chat.otherUser?.id
+
+  useEffect(() => {
+    const handleTyping = ({ userId, chatId }) => {
+      if (chatId === chat.id && userId === otherUserId) {
+        setTypingUserId(userId)
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+        typingTimeoutRef.current = setTimeout(() => setTypingUserId(null), 3000)
+      }
+    }
+
+    socket.on('chat:typing', handleTyping)
+    return () => {
+      socket.off('chat:typing', handleTyping)
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    }
+  }, [chat.id, otherUserId])
+
+  const emitTyping = useCallback(() => {
+    if (!otherUserId) return
+    const now = Date.now()
+    if (now - lastTypingEmitRef.current < 2000) return
+    lastTypingEmitRef.current = now
+    socket.emit('chat:typing', { targetUserId: otherUserId, chatId: chat.id })
+  }, [otherUserId, chat.id])
 
   const sendMutation = useMutation({
     mutationFn: async (content) => {
@@ -181,8 +213,24 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
         </button>
         <div className="flex-1 min-w-0">
           <button onClick={handleOpenProfile} className="inline-flex items-center gap-3 hover:opacity-80 transition">
-            <Avatar src={chat.otherUser?.avatar_url} size={36} />
-            <span className="text-zinc-100 text-sm font-medium truncate">{chat.otherUser?.username}</span>
+            <div className="relative">
+              <Avatar src={chat.otherUser?.avatar_url} size={36} />
+              {isOnline(chat.otherUser?.id) ? (
+                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-zinc-950" />
+              ) : chat.otherUser?.last_seen_at ? (
+                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-zinc-600 ring-2 ring-zinc-950" />
+              ) : null}
+            </div>
+            <div className="flex flex-col items-start">
+              <span className="text-zinc-100 text-sm font-medium truncate">{chat.otherUser?.username}</span>
+              {typingUserId ? (
+                <span className="text-green-400 text-xs">escribiendo...</span>
+              ) : isOnline(chat.otherUser?.id) ? (
+                <span className="text-green-500 text-xs">En línea</span>
+              ) : chat.otherUser?.last_seen_at ? (
+                <span className="text-zinc-500 text-xs">Conectado {timeAgo(chat.otherUser?.last_seen_at)}</span>
+              ) : null}
+            </div>
           </button>
         </div>
         {isFriend && (
@@ -284,7 +332,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
           <input
             type="text"
             value={input}
-            onChange={e => { setInput(e.target.value); setError('') }}
+            onChange={e => { setInput(e.target.value); setError(''); emitTyping() }}
             onKeyDown={handleKeyDown}
             placeholder="Escribí un mensaje..."
             maxLength={300}

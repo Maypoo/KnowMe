@@ -4,6 +4,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Heart, Send, User, X } from 'lucide-react'
 import NumberFlow from '@number-flow/react'
 import { api } from '../lib/api'
+import { useOnlineUsers } from '../lib/OnlineUsersContext'
+import { timeAgo } from '../lib/timeAgo'
 import Avatar from '../components/Avatar'
 import { SkeletonBox, SkeletonAvatar } from '../components/Skeleton'
 import countries from '../data/countries'
@@ -26,6 +28,7 @@ export default function PublicProfile() {
   const [showAvatar, setShowAvatar] = useState(false)
 
   const [post, setPost] = useState(null)
+  const { isOnline } = useOnlineUsers()
 
   useEffect(() => {
     api('/api/auth/me')
@@ -189,7 +192,12 @@ export default function PublicProfile() {
           </button>
 
           <div className="text-center">
-            <h1 className="text-xl font-semibold">{profile.username}</h1>
+            <h1 className="text-xl font-semibold inline-flex items-center gap-2">
+              {profile.username}
+              {profile.friend_request_status === 'accepted' && (
+                <span className={`w-2 h-2 rounded-full inline-block ${isOnline(profile.id) ? 'bg-green-500' : 'bg-zinc-600'}`} />
+              )}
+            </h1>
             {profile.bio && (
               <p className="text-zinc-400 text-sm text-center max-w-sm mt-2 whitespace-pre-wrap">{profile.bio}</p>
             )}

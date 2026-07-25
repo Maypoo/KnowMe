@@ -263,13 +263,14 @@ export const list = asyncHandler(async (req, res) => {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url')
+    .select('id, username, display_name, avatar_url, last_seen_at, show_activity')
     .in('id', friendIds)
 
   const friends = (profiles || []).map(p => ({
     id: p.id,
     username: sanitize(p.display_name || p.username),
     avatar_url: p.avatar_url,
+    last_seen_at: p.show_activity ? p.last_seen_at : null,
   }))
 
   res.json({ friends })

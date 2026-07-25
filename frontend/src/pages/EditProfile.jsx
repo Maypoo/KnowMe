@@ -28,6 +28,9 @@ export default function EditProfile() {
   const [country, setCountry] = useState(null)
   const [showCountry, setShowCountry] = useState(false)
   const [updatingCountry, setUpdatingCountry] = useState(false)
+  const [showActivity, setShowActivity] = useState(true)
+  const [initialActivity, setInitialActivity] = useState(true)
+  const [updatingActivity, setUpdatingActivity] = useState(false)
   const checkTimerRef = useRef(null)
   const fileInputRef = useRef(null)
 
@@ -65,6 +68,9 @@ export default function EditProfile() {
       setShowAge(profileData.profile.show_age || false)
       setCountry(profileData.profile.country || null)
       setShowCountry(profileData.profile.show_country || false)
+      const activity = profileData.profile.show_activity !== false
+      setShowActivity(activity)
+      setInitialActivity(activity)
       setUsernameLimits(profileData.limits || null)
     }
   }, [profileData])
@@ -257,7 +263,7 @@ export default function EditProfile() {
       if (!res.ok) {
         setError(data.error)
       } else {
-        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
+        queryClient.setQueryData(['editProfile'], old => old ? { ...old, profile: data.profile } : old)
         setDisplayNameInput(data.profile.username.replace(/^@/, ''))
       }
     } catch (err) {
@@ -316,7 +322,7 @@ export default function EditProfile() {
         setError(data.error)
         if (data.limits) setUsernameLimits(data.limits)
       } else {
-        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
+        queryClient.setQueryData(['editProfile'], old => old ? { ...old, profile: data.profile, limits: data.limits } : old)
         setDisplayNameInput(data.profile.username.replace(/^@/, ''))
         setUsernameInput(data.profile.username.replace(/^@/, ''))
         setUsernameAvailable(null)
@@ -346,7 +352,7 @@ export default function EditProfile() {
       if (!res.ok) {
         setError(data.error)
       } else {
-        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
+        queryClient.setQueryData(['editProfile'], old => old ? { ...old, profile: data.profile } : old)
         setBio(data.profile.bio || '')
       }
     } catch (err) {
@@ -376,7 +382,7 @@ export default function EditProfile() {
       if (!res.ok) {
         setError(data.error)
       } else {
-        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
+        queryClient.setQueryData(['editProfile'], old => old ? { ...old, profile: data.profile } : old)
         setBirthDate(data.profile.birth_date || '')
         setShowAge(data.profile.show_age || false)
       }
@@ -406,7 +412,7 @@ export default function EditProfile() {
       if (!res.ok) {
         setError(data.error)
       } else {
-        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
+        queryClient.setQueryData(['editProfile'], old => old ? { ...old, profile: data.profile } : old)
         setCountry(data.profile.country || null)
         setShowCountry(data.profile.show_country || false)
       }
@@ -415,6 +421,31 @@ export default function EditProfile() {
       setError('Error de conexión con el servidor')
     } finally {
       setUpdatingCountry(false)
+    }
+  }
+
+  const handleSaveActivity = async () => {
+    setUpdatingActivity(true)
+    setError(null)
+
+    try {
+      const res = await api('/api/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({ show_activity: showActivity }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error)
+      } else {
+        setInitialActivity(showActivity)
+        queryClient.invalidateQueries({ queryKey: ['editProfile'] })
+      }
+    } catch (err) {
+      console.error(err)
+      setError('Error de conexión con el servidor')
+    } finally {
+      setUpdatingActivity(false)
     }
   }
 
@@ -624,6 +655,26 @@ export default function EditProfile() {
                 className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
               />
               <span className="text-sm text-zinc-400">Mostrar país en el perfil</span>
+            </label>
+          </div>
+
+          <div className="w-full max-w-sm space-y-2">
+            <label className="text-sm text-zinc-500">Privacidad</label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showActivity}
+                onChange={e => setShowActivity(e.target.checked)}
+                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
+              />
+              <span className="text-sm text-zinc-400">Mostrar actividad a mis amigos</span>
+              <button
+                onClick={handleSaveActivity}
+                disabled={updatingActivity || showActivity === initialActivity}
+                className="ml-auto text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-1.5 transition disabled:opacity-50"
+              >
+                {updatingActivity ? 'Guardando...' : 'Guardar'}
+              </button>
             </label>
           </div>
 

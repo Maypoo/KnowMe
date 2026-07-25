@@ -2,6 +2,7 @@ import { Server } from 'socket.io'
 import { supabase } from '../lib/supabase.js'
 
 let io
+const onlineUsers = new Set()
 const inCall = new Set()
 const callPairs = new Map()
 
@@ -51,11 +52,39 @@ export function setupSocket(server) {
     }
 
     socket.user = user
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('show_activity')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    socket.showActivity = profile?.show_activity !== false
     next()
   })
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     socket.join(socket.user.id)
+    onlineUsers.add(socket.user.id)
+
+    if (socket.showActivity) {
+      socket.broadcast.emit('user:online', { userId: socket.user.id })
+    }
+
+    const { data: onlineProfiles } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('id', [...onlineUsers])
+      .eq('show_activity', true)
+
+    const visibleIds = onlineProfiles ? onlineProfiles.map(p => p.id) : []
+    socket.emit('users:online', { userIds: visibleIds })
+
+    socket.on('chat:typing', (data) => {
+      const { targetUserId, chatId } = data
+      if (!targetUserId || !chatId) return
+      io.to(targetUserId).emit('chat:typing', { userId: socket.user.id, chatId })
+    })
 
     socket.on('signal:offer', async (data) => {
       try {
@@ -141,6 +170,11 @@ export function setupSocket(server) {
     })
 
     socket.on('disconnect', () => {
+      onlineUsers.delete(socket.user.id)
+      supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', socket.user.id).then().catch(() => {})
+      if (socket.showActivity) {
+        socket.broadcast.emit('user:offline', { userId: socket.user.id })
+      }
       inCall.delete(socket.user.id)
       const partnerId = callPairs.get(socket.user.id)
       if (partnerId) {
@@ -157,6 +191,10 @@ export function setupSocket(server) {
 
 export function getIO() {
   return io
+}
+
+export function isUserOnline(userId) {
+  return onlineUsers.has(userId)
 }
 
 export function isInCall(userId) {

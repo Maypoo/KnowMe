@@ -2,8 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import Avatar from './Avatar'
 import { SkeletonBox, SkeletonAvatar } from './Skeleton'
+import { useOnlineUsers } from '../lib/OnlineUsersContext'
 
 export default function ChatsList({ onSelectChat }) {
+  const { isOnline } = useOnlineUsers()
   const { data: chats = [], isLoading } = useQuery({
     queryKey: ['chats'],
     queryFn: async () => {
@@ -51,8 +53,15 @@ export default function ChatsList({ onSelectChat }) {
                   onClick={() => onSelectChat(chat)}
                   className="w-full rounded-lg px-4 py-3 flex items-center gap-3 transition bg-zinc-900 hover:bg-zinc-800"
                 >
-                  <Avatar src={chat.otherUser?.avatar_url} size={40} />
-                  <div className="flex-1 min-w-0 text-left">
+                  <div className="relative">
+                    <Avatar src={chat.otherUser?.avatar_url} size={40} />
+                    {isOnline(chat.otherUser?.id) ? (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 ring-2 ring-zinc-950" />
+                    ) : chat.otherUser?.last_seen_at ? (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-zinc-600 ring-2 ring-zinc-950" />
+                    ) : null}
+                  </div>
+                    <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between">
                       <span className="text-zinc-100 text-sm font-medium">
                         {chat.otherUser?.username || 'Desconocido'}
