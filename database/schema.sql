@@ -133,7 +133,9 @@ create table chat_messages (
   chat_id uuid references chats on delete cascade not null,
   sender_id uuid references auth.users on delete cascade not null,
   content text not null,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  edited_at timestamptz,
+  deleted boolean default false
 );
 
 create index idx_chat_messages_chat on chat_messages(chat_id, created_at);

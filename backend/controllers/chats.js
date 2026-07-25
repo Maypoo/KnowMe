@@ -100,6 +100,7 @@ export const list = asyncHandler(async (req, res) => {
         .select('*', { count: 'exact', head: true })
         .eq('chat_id', chat.id)
         .neq('sender_id', req.user.id)
+        .eq('deleted', false)
         .gt('created_at', lastReadMap[chat.id] || chat.created_at),
     ])
 
@@ -113,9 +114,10 @@ export const list = asyncHandler(async (req, res) => {
       unreadCount,
       lastMessage: lastMsg ? {
         id: lastMsg.id,
-        content: lastMsg.content,
+        content: lastMsg.deleted ? 'Mensaje eliminado' : lastMsg.content,
         sender_id: lastMsg.sender_id,
         created_at: lastMsg.created_at,
+        deleted: lastMsg.deleted,
       } : null,
       updatedAt: chat.updated_at,
       createdAt: chat.created_at,
@@ -271,6 +273,7 @@ export const unreadTotal = asyncHandler(async (req, res) => {
       .select('*', { count: 'exact', head: true })
       .eq('chat_id', p.chat_id)
       .neq('sender_id', req.user.id)
+      .eq('deleted', false)
       .gt('created_at', p.last_read_at || chatCreatedMap[p.chat_id] || p.created_at)
     total += (count || 0)
   }
@@ -386,20 +389,130 @@ export const sendMessage = asyncHandler(async (req, res) => {
   if (io) {
     const otherUserIds = participants.filter(p => p.user_id !== req.user.id).map(p => p.user_id)
     for (const uid of otherUserIds) {
-      io.to(uid).emit('new_message', {
-        chatId,
-        message: {
-          id: message.id,
-          chat_id: chatId,
-          sender_id: message.sender_id,
-          content: message.content,
-          created_at: message.created_at,
-        },
-      })
+      io.to(uid).emit('new_message', { chatId, message })
     }
   }
 
   res.json({ message })
+})
+
+export const editMessage = asyncHandler(async (req, res) => {
+  const { chatId, messageId } = req.params
+  const { content } = req.body
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: 'El mensaje no puede estar vacío' })
+  }
+
+  if (content.trim().length > 300) {
+    return res.status(400).json({ error: 'El mensaje no puede superar los 300 caracteres' })
+  }
+
+  const { data: participants } = await supabase
+    .from('chat_participants')
+    .select('user_id')
+    .eq('chat_id', chatId)
+
+  if (!participants || participants.length === 0) {
+    return res.status(404).json({ error: 'Chat no encontrado' })
+  }
+
+  const isParticipant = participants.some(p => p.user_id === req.user.id)
+  if (!isParticipant) {
+    return res.status(403).json({ error: 'No sos participante de este chat' })
+  }
+
+  const { data: message, error: msgError } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('id', messageId)
+    .eq('chat_id', chatId)
+    .single()
+
+  if (msgError || !message) {
+    return res.status(404).json({ error: 'Mensaje no encontrado' })
+  }
+
+  if (message.sender_id !== req.user.id) {
+    return res.status(403).json({ error: 'Solo podés editar tus propios mensajes' })
+  }
+
+  if (message.deleted) {
+    return res.status(400).json({ error: 'No podés editar un mensaje eliminado' })
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from('chat_messages')
+    .update({ content: content.trim(), edited_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .select()
+    .single()
+
+  if (updateError) {
+    return res.status(400).json({ error: 'Error al editar el mensaje' })
+  }
+
+  const io = getIO()
+  if (io) {
+    const allUserIds = participants.map(p => p.user_id)
+    for (const uid of allUserIds) {
+      io.to(uid).emit('message_updated', { chatId, message: updated })
+    }
+  }
+
+  res.json({ message: updated })
+})
+
+export const deleteMessage = asyncHandler(async (req, res) => {
+  const { chatId, messageId } = req.params
+
+  const { data: participants } = await supabase
+    .from('chat_participants')
+    .select('user_id')
+    .eq('chat_id', chatId)
+
+  if (!participants || participants.length === 0) {
+    return res.status(404).json({ error: 'Chat no encontrado' })
+  }
+
+  const isParticipant = participants.some(p => p.user_id === req.user.id)
+  if (!isParticipant) {
+    return res.status(403).json({ error: 'No sos participante de este chat' })
+  }
+
+  const { data: message, error: msgError } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('id', messageId)
+    .eq('chat_id', chatId)
+    .single()
+
+  if (msgError || !message) {
+    return res.status(404).json({ error: 'Mensaje no encontrado' })
+  }
+
+  if (message.sender_id !== req.user.id) {
+    return res.status(403).json({ error: 'Solo podés eliminar tus propios mensajes' })
+  }
+
+  const { error: deleteError } = await supabase
+    .from('chat_messages')
+    .update({ deleted: true })
+    .eq('id', messageId)
+
+  if (deleteError) {
+    return res.status(400).json({ error: 'Error al eliminar el mensaje' })
+  }
+
+  const io = getIO()
+  if (io) {
+    const allUserIds = participants.map(p => p.user_id)
+    for (const uid of allUserIds) {
+      io.to(uid).emit('message_deleted', { chatId, messageId: Number(messageId) })
+    }
+  }
+
+  res.json({ message: 'Mensaje eliminado' })
 })
 
 export const markRead = asyncHandler(async (req, res) => {

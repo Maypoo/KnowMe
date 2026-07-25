@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Phone, Send } from 'lucide-react'
+import { ChevronLeft, Phone, Send, Pencil, Trash2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
@@ -20,6 +20,9 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
   const typingTimeoutRef = useRef(null)
   const lastTypingEmitRef = useRef(0)
   const bottomRef = useRef(null)
+  const [popupMsgId, setPopupMsgId] = useState(null)
+  const [editingMsgId, setEditingMsgId] = useState(null)
+  const [editContent, setEditContent] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['messages', chat.id],
@@ -94,6 +97,44 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
     return () => socket.off('new_message', handleNewMessage)
   }, [chat.id, queryClient])
 
+  useEffect(() => {
+    const handleUpdated = (msgData) => {
+      if (msgData.chatId === chat.id) {
+        queryClient.setQueryData(['messages', chat.id], (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            messages: old.messages.map(m =>
+              m.id === msgData.message.id ? msgData.message : m
+            ),
+          }
+        })
+      }
+    }
+
+    socket.on('message_updated', handleUpdated)
+    return () => socket.off('message_updated', handleUpdated)
+  }, [chat.id, queryClient])
+
+  useEffect(() => {
+    const handleDeleted = (msgData) => {
+      if (msgData.chatId === chat.id) {
+        queryClient.setQueryData(['messages', chat.id], (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            messages: old.messages.map(m =>
+              m.id === msgData.messageId ? { ...m, deleted: true } : m
+            ),
+          }
+        })
+      }
+    }
+
+    socket.on('message_deleted', handleDeleted)
+    return () => socket.off('message_deleted', handleDeleted)
+  }, [chat.id, queryClient])
+
   const otherUserId = chat.otherUser?.id
 
   useEffect(() => {
@@ -111,6 +152,21 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     }
   }, [chat.id, otherUserId])
+
+  useEffect(() => {
+    if (!popupMsgId && !editingMsgId) return
+    const handleClick = (e) => {
+      const inPopup = e.target.closest('[data-popup-menu]')
+      const inModal = e.target.closest('[data-edit-modal]')
+      const inBubble = e.target.closest('[data-message-bubble]')
+      if (!inPopup && !inModal && !inBubble) {
+        setPopupMsgId(null)
+        setEditingMsgId(null)
+      }
+    }
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [popupMsgId, editingMsgId])
 
   const emitTyping = useCallback(() => {
     if (!otherUserId) return
@@ -148,6 +204,64 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
         queryClient.setQueryData(['chatsUnread'], newTotal)
         return updated
       })
+    },
+    onError: (err) => {
+      setError(err.message)
+    },
+  })
+
+  const editMutation = useMutation({
+    mutationFn: async ({ messageId, content }) => {
+      const res = await api(`/api/chats/${chat.id}/messages/${messageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ content }),
+      })
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.error || 'Error al editar el mensaje')
+      }
+      return res.json()
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(['messages', chat.id], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          messages: old.messages.map(m =>
+            m.id === result.message.id ? result.message : m
+          ),
+        }
+      })
+      setEditingMsgId(null)
+      setEditContent('')
+    },
+    onError: (err) => {
+      setError(err.message)
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (messageId) => {
+      const res = await api(`/api/chats/${chat.id}/messages/${messageId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.error || 'Error al eliminar el mensaje')
+      }
+      return res.json()
+    },
+    onSuccess: (_, messageId) => {
+      queryClient.setQueryData(['messages', chat.id], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          messages: old.messages.map(m =>
+            m.id === messageId ? { ...m, deleted: true } : m
+          ),
+        }
+      })
+      setPopupMsgId(null)
     },
     onError: (err) => {
       setError(err.message)
@@ -205,6 +319,44 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
     }
   }
 
+  const handleMessageTap = (msg, msgId) => {
+    if (editingMsgId || msg.deleted) return
+    setPopupMsgId(prev => prev === msgId ? null : msgId)
+  }
+
+  const handleStartEdit = (msg) => {
+    setEditContent(msg.content)
+    setEditingMsgId(msg.id)
+    setPopupMsgId(null)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingMsgId(null)
+    setEditContent('')
+  }
+
+  const handleSaveEdit = () => {
+    const text = editContent.trim()
+    const original = messages.find(m => m.id === editingMsgId)?.content
+    if (!text || text === original) return
+    if (text.length > 300) {
+      setError('El mensaje no puede superar los 300 caracteres')
+      return
+    }
+    setError('')
+    editMutation.mutate({ messageId: editingMsgId, content: text })
+  }
+
+  const handleEditKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSaveEdit()
+    }
+    if (e.key === 'Escape') {
+      handleCancelEdit()
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center gap-3 mb-4">
@@ -244,7 +396,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-2 mb-4">
+      <div className="flex-1 overflow-y-auto space-y-2 mb-4" data-messages-container>
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-zinc-600 text-sm">Cargando...</p>
@@ -258,6 +410,10 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
             const date = new Date(msg.created_at)
             const today = new Date()
             const isNewDay = i === 0 || new Date(messages[i - 1].created_at).toDateString() !== date.toDateString()
+            const isOwn = msg.sender_id === profile.id
+            const isCallMsg = msg.content.startsWith('Llamada perdida de ')
+            const displayContent = msg.deleted ? 'Mensaje eliminado' : msg.content
+
             return (
               <div key={msg.id}>
                 {isNewDay && (
@@ -267,7 +423,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
                       : date.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 )}
-                {msg.content.startsWith('Llamada perdida de ') ? (
+                {isCallMsg ? (
                   <div className="flex justify-center">
                     <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-800/50">
                       <Phone size={14} className="text-zinc-500" />
@@ -278,30 +434,89 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall })
                     </div>
                   </div>
                 ) : (
-                <div className={`flex ${msg.sender_id === profile.id ? 'justify-end' : 'justify-start'}`}>
+                <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`max-w-[80%] min-w-[100px] rounded-2xl px-4 py-3 break-words ${
-                      msg.sender_id === profile.id ? 'rounded-br-md' : 'rounded-bl-md'
-                    }`}
+                    className={`max-w-[80%] min-w-[100px] rounded-2xl px-4 py-3 break-words${isOwn ? ' cursor-pointer' : ''} ${
+                      isOwn ? 'rounded-br-md' : 'rounded-bl-md'
+                    } ${isOwn && popupMsgId === msg.id ? 'relative' : ''}`}
+                      data-message-bubble={isOwn ? '' : undefined}
                     style={{
-                      backgroundColor: msg.sender_id === profile.id ? 'var(--color-accent)' : '#27272a',
+                      backgroundColor: isOwn ? 'var(--color-accent)' : '#27272a',
                     }}
+                    onClick={() => isOwn && handleMessageTap(msg, msg.id)}
                   >
-                    <p className="text-zinc-100 text-sm">{msg.content}</p>
+                    <p className={`text-sm ${msg.deleted ? 'text-zinc-400 italic' : 'text-zinc-100'}`}>{displayContent}</p>
                     <p className="text-zinc-400 text-[10px] text-right mt-1">
                       {date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                      {msg.edited_at && !msg.deleted && (
+                          <span className="text-zinc-400 ml-1">(editado)</span>
+                      )}
                     </p>
+                    {isOwn && popupMsgId === msg.id && (
+                      <div className="absolute z-10 right-0 bottom-full mb-1.5 flex flex-col bg-zinc-800 rounded-lg py-0.5 shadow-lg border border-zinc-700 whitespace-nowrap min-w-[110px]" data-popup-menu>
+                        <button
+                          onClick={() => handleStartEdit(msg)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-zinc-700 transition text-xs text-zinc-300"
+                        >
+                          <Pencil size={11} />
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => deleteMutation.mutate(msg.id)}
+                          disabled={deleteMutation.isPending}
+                          className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-red-900/40 transition text-xs text-red-400 disabled:opacity-40"
+                        >
+                          <Trash2 size={11} />
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 )}
               </div>
-          )})
+            )
+          })
         )}
         <div ref={bottomRef} />
       </div>
 
       {error && (
         <p className="text-red-400 text-xs mb-2 text-center">{error}</p>
+      )}
+
+      {editingMsgId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={handleCancelEdit} data-edit-modal>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-center p-4 border-b border-zinc-800 relative">
+              <h2 className="text-zinc-100 font-semibold text-lg">Editar mensaje</h2>
+              <button onClick={handleCancelEdit} className="absolute right-4 text-zinc-400 hover:text-zinc-200 transition p-1">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4">
+              <input
+                type="text"
+                value={editContent}
+                onChange={e => { setEditContent(e.target.value); setError('') }}
+                onKeyDown={handleEditKeyDown}
+                maxLength={300}
+                autoFocus
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100 text-sm outline-none focus:border-zinc-500 transition"
+              />
+            </div>
+            <div className="flex justify-center pb-4 px-4">
+              <button
+                onClick={handleSaveEdit}
+                disabled={!editContent.trim() || editContent.trim() === messages.find(m => m.id === editingMsgId)?.content || editMutation.isPending}
+                className="px-4 py-2 rounded-lg text-sm text-white transition hover:opacity-90 disabled:opacity-40"
+                style={{ backgroundColor: 'var(--color-accent)' }}
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {!isFriend ? (
