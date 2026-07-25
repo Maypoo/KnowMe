@@ -132,12 +132,11 @@ export default function NotificationsPanel() {
         </div>
         <ul className="space-y-1">
           {[1,2,3,4,5].map(i => (
-            <li key={i} className="flex items-center justify-between bg-zinc-900 rounded-lg px-3 py-3">
+            <li key={i} className="flex items-center bg-zinc-900 rounded-lg px-3 py-3">
               <div className="flex items-center gap-3">
                 <SkeletonAvatar size={32} />
                 <SkeletonBox className="h-4 w-48" />
               </div>
-              <SkeletonBox className="h-6 w-24 rounded-lg" />
             </li>
           ))}
         </ul>
