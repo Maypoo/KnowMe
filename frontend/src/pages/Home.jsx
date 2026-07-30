@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
-import NumberFlow from '@number-flow/react'
-import { ArrowLeft, Search, X, Plus, User, Home as HomeIcon, Users, Send, Bell, Edit, Heart, Trash2, Settings, Phone } from 'lucide-react'
+import { Search, Settings, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from '../components/Avatar'
+import Sidebar from '../components/Sidebar'
+import MobileNav from '../components/MobileNav'
+import SearchView from '../components/SearchView'
+import CreatePostView from '../components/CreatePostView'
+import DeleteConfirmModal from '../components/DeleteConfirmModal'
+import PreferencesModal from '../components/PreferencesModal'
 import Feed from '../components/Feed'
 import FriendSearch from '../components/FriendSearch'
 import FriendRequests from '../components/FriendRequests'
@@ -16,7 +21,6 @@ import ChatConversation from '../components/ChatConversation'
 import NewChat from '../components/NewChat'
 import VoiceCall from '../components/VoiceCall'
 import NotificationsPanel from '../components/NotificationsPanel'
-import TagSelectorModal from '../components/TagSelectorModal'
 
 const TABS = [
   { key: 'friends', label: 'Amigos' },
@@ -50,7 +54,7 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [tab, setTab] = useState(saved.current?.tab ?? 'friends')
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [view, setView] = useState(saved.current?.view ?? 'friends')
+  const [view, setView] = useState(saved.current?.view ?? 'home')
   const [chatsView, setChatsView] = useState(saved.current?.chatsView ?? 'list')
   const [activeChat, setActiveChat] = useState(saved.current?.activeChat ?? null)
   const [postContent, setPostContent] = useState('')
@@ -77,6 +81,8 @@ export default function Home() {
   const voiceCallRef = useRef(null)
   const viewRef = useRef(view)
   useEffect(() => { viewRef.current = view }, [view])
+  const activeChatRef = useRef(activeChat)
+  useEffect(() => { activeChatRef.current = activeChat }, [activeChat])
   const [incomingCall, setIncomingCall] = useState(null)
   const [incomingCallSeen, setIncomingCallSeen] = useState(false)
 
@@ -115,23 +121,27 @@ export default function Home() {
     }
 
     const handleRequestReceived = () => {
+      queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
       queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
       queryClient.invalidateQueries({ queryKey: ['friendRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
     }
 
     const handleRequestUpdated = () => {
       queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
       queryClient.invalidateQueries({ queryKey: ['friends'] })
       queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
     }
 
     const handleRequestCancelled = () => {
       queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
       queryClient.invalidateQueries({ queryKey: ['friendRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
     }
 
     const handleNewMessage = (data) => {
-      if (viewRef.current === 'chats' && activeChat?.id === data?.chatId) return
+      if (viewRef.current === 'chats' && activeChatRef.current?.id === data?.chatId) return
       queryClient.invalidateQueries({ queryKey: ['chats'] })
       queryClient.invalidateQueries({ queryKey: ['chatsUnread'] })
     }
@@ -149,7 +159,7 @@ export default function Home() {
     }
 
     const handleMessagesRead = (data) => {
-      if (viewRef.current === 'chats' && activeChat?.id === data?.chatId) return
+      if (viewRef.current === 'chats' && activeChatRef.current?.id === data?.chatId) return
       queryClient.invalidateQueries({ queryKey: ['chats'] })
       queryClient.invalidateQueries({ queryKey: ['chatsUnread'] })
     }
@@ -157,14 +167,14 @@ export default function Home() {
     const handleReconnect = () => {
       queryClient.invalidateQueries({ queryKey: ['chats'] })
       queryClient.invalidateQueries({ queryKey: ['chatsUnread'] })
-      if (activeChat) {
-        queryClient.invalidateQueries({ queryKey: ['messages', activeChat.id] })
+      if (activeChatRef.current) {
+        queryClient.invalidateQueries({ queryKey: ['messages', activeChatRef.current.id] })
       }
     }
 
     const handleIncomingCall = (data) => {
       setIncomingCall({ from: data.caller, sdp: data.sdp })
-      setIncomingCallSeen(activeChat?.otherUser?.id === data.caller.id)
+      setIncomingCallSeen(viewRef.current === 'chats' && activeChatRef.current?.otherUser?.id === data.caller.id)
     }
 
     const handleCallEnd = () => {
@@ -197,7 +207,7 @@ export default function Home() {
       socket.off('signal:offer', handleIncomingCall)
       socket.off('call:end', handleCallEnd)
     }
-  }, [profile, activeChat])
+  }, [profile])
 
   const { data: unreadTotal } = useQuery({
     queryKey: ['chatsUnread'],
@@ -475,6 +485,12 @@ export default function Home() {
     addToRecentSearches(q, 'query')
   }
 
+  const handleSearchBack = () => {
+    setSearchQuery('')
+    setSearchResults([])
+    setSearched(false)
+  }
+
   const handleSelectFriend = async (friend) => {
     try {
       const res = await api('/api/chats', {
@@ -504,128 +520,65 @@ export default function Home() {
 
   return (
     <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overscroll-none">
+      <Sidebar
+        profile={profile}
+        view={view}
+        setView={setView}
+        navigate={navigate}
+        pendingRequestsCount={pendingRequestsCount}
+        notificationsCount={notificationsCount}
+        unreadTotal={unreadTotal}
+        incomingCall={incomingCall}
+        incomingCallSeen={incomingCallSeen}
+        handleLogout={handleLogout}
+        setPreferencesOpen={setPreferencesOpen}
+        setTab={setTab}
+        setSearchQuery={setSearchQuery}
+        setSearchResults={setSearchResults}
+        setSearched={setSearched}
+        setActiveChat={setActiveChat}
+        setChatsView={setChatsView}
+      />
       {view === 'search' ? (
-        <div className="flex-1 flex flex-col min-h-0 px-6 py-6">
-          <div className="flex items-center gap-2 mb-4">
-            <button
-              onClick={() => setView('friends')}
-              className="rounded-full p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <h2 className="text-zinc-100 text-lg font-semibold">Buscar usuarios</h2>
-          </div>
-          <form onSubmit={handleSearch} className="flex gap-2 mb-6">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Nombre de usuario..."
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-zinc-600 transition"
-              autoFocus
-            />
-            <button
-              type="submit"
-              disabled={searching || searchQuery.length < 1}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: 'var(--color-accent)' }}
-            >
-              Buscar
-            </button>
-          </form>
-          <div className="flex-1 overflow-y-auto">
-            {searching && (
-              <p className="text-zinc-500 text-sm text-center py-8">Buscando...</p>
-            )}
-            {!searching && searchResults.length > 0 && (
-              <div className="space-y-1">
-                {searchResults.map(user => (
-                  <button
-                    key={user.id}
-                    onClick={() => { addToRecentSearches(user.username, 'user'); localStorage.setItem(HOME_STATE_KEY, JSON.stringify({ view, tab, activeChat, chatsView })); navigate('/' + user.username) }}
-                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-zinc-800 transition rounded-lg"
-                  >
-                    <Avatar src={user.avatar_url} size={40} />
-                    <span className="text-sm text-zinc-300">{user.username}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {!searching && searched && searchResults.length === 0 && (
-              <p className="text-zinc-500 text-sm text-center py-8">Sin resultados</p>
-            )}
-            {!searching && !searched && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-zinc-500 text-sm font-medium">Búsquedas recientes</h3>
-                  {recentSearches.length > 0 && (
-                    <button
-                      onClick={() => { localStorage.removeItem('knowme_recent_searches'); setRecentSearches([]) }}
-                      className="text-xs text-zinc-600 hover:text-zinc-400 transition"
-                    >
-                      Limpiar todo
-                    </button>
-                  )}
-                </div>
-                {recentSearches.length === 0 ? (
-                  <p className="text-zinc-600 text-sm text-center py-8">No hay búsquedas recientes</p>
-                ) : (
-                  <div className="space-y-1">
-                    {recentSearches.map((entry, i) => (
-                      <div
-                        key={`${entry.type}-${entry.value}-${i}`}
-                        className="group flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
-                        onClick={() => {
-                          setSearchQuery('')
-                          setSearchResults([])
-                          setSearched(false)
-                          if (entry.type === 'user') {
-                            localStorage.setItem(HOME_STATE_KEY, JSON.stringify({ view, tab, activeChat, chatsView }))
-                            navigate('/' + entry.value)
-                          } else {
-                            const synthetic = { preventDefault: () => {} }
-                            handleSearch(synthetic, entry.value)
-                          }
-                        }}
-                      >
-                        {entry.type === 'user' ? (
-                          <User size={16} className="text-zinc-600 shrink-0" />
-                        ) : (
-                          <Search size={16} className="text-zinc-600 shrink-0" />
-                        )}
-                        <span className="flex-1 text-sm text-zinc-400 group-hover:text-zinc-300 transition truncate">{entry.value}</span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); const prev = JSON.parse(localStorage.getItem('knowme_recent_searches') || '[]'); const next = prev.filter(s => s.value !== entry.value || s.type !== entry.type); localStorage.setItem('knowme_recent_searches', JSON.stringify(next)); setRecentSearches(next) }}
-                          className="p-1 rounded text-zinc-600 hover:text-zinc-300 hover:bg-zinc-700 transition"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <SearchView
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          searchResults={searchResults}
+          setSearchResults={setSearchResults}
+          searching={searching}
+          setSearching={setSearching}
+          searched={searched}
+          setSearched={setSearched}
+          recentSearches={recentSearches}
+          setRecentSearches={setRecentSearches}
+          handleSearch={handleSearch}
+          handleSearchBack={handleSearchBack}
+          addToRecentSearches={addToRecentSearches}
+          navigate={navigate}
+          view={view}
+          setView={setView}
+          tab={tab}
+          activeChat={activeChat}
+          chatsView={chatsView}
+        />
       ) : (
-        <div className="px-6 py-6 flex-1 flex flex-col min-h-0">
+        <div className="lg:ml-64 px-6 py-6 flex-1 flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-2xl font-semibold">KnowMe</h1>
+            <h1 className="text-2xl font-semibold lg:hidden">KnowMe</h1>
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setPreferencesOpen(true)}
-                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition lg:hidden"
               >
                 <Settings size={20} />
               </button>
               <button
                 onClick={() => { setView('search'); setSearchQuery(''); setSearchResults([]); setSearched(false) }}
-                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition lg:hidden"
               >
                 <Search size={20} />
               </button>
-              <div className="relative" ref={dropdownRef}>
+              <div className="relative lg:hidden" ref={dropdownRef}>
                 <button onClick={() => setDropdownOpen(!dropdownOpen)} className="flex items-center gap-3 outline-none">
                   <span className="text-zinc-500 text-sm">{profile.username}</span>
                   <Avatar src={profile.avatar_url} size={40} />
@@ -651,7 +604,7 @@ export default function Home() {
           </div>
 
           {view === 'friends' && (
-            <div className="flex gap-1 bg-zinc-900 rounded-lg p-1 mb-8">
+            <div className="flex gap-1 bg-zinc-900 rounded-lg p-1 mb-8 lg:max-w-xl lg:mx-auto lg:w-full">
               {TABS.map(t => (
                 <button
                   key={t.key}
@@ -682,127 +635,68 @@ export default function Home() {
             </div>
           )}
 
-          <div className="pb-20 flex-1 flex flex-col min-h-0">
+          <div className="pb-20 lg:pb-0 flex-1 flex flex-col min-h-0">
             {view === 'home' ? (
               <Feed />
             ) : view === 'plus' ? (
-              <div className="flex-1 flex items-center justify-center px-6">
-                <div className="w-full max-w-md flex flex-col items-center gap-4 h-60">
-                  <textarea
-                    value={postContent}
-                    onChange={(e) => setPostContent(e.target.value.slice(0, 300))}
-                    placeholder="Escribí tus intereses actuales."
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-zinc-100 placeholder-zinc-500 resize-none focus:outline-none transition h-32"
-                    style={myPost && !editing ? { borderColor: '#52525b', opacity: 0.5 } : undefined}
-                    readOnly={!!myPost && !editing}
-                    maxLength={300}
-                  />
-                  {selectedTagNames.length > 0 && (
-                    <div className="w-full flex items-center gap-2 flex-wrap">
-                      {selectedTagNames.map(name => (
-                        <span key={name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-sm font-medium text-zinc-200 bg-zinc-700">
-                          <span>#{name}</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="w-full flex items-center justify-between">
-                    <span className="text-zinc-500 text-sm">{postContent.length}/300</span>
-                    <div className="flex items-center gap-2">
-                      {myPost && !editing && (
-                        <>
-                          <button
-                            onClick={() => setConfirmingDelete(true)}
-                            className="rounded-lg p-2 transition hover:opacity-80"
-                            style={{ backgroundColor: '#ef4444' }}
-                          >
-                            <Trash2 size={18} strokeWidth={2.5} />
-                          </button>
-                        </>
-                      )}
-                      {myPost && !editing && (
-                        <button
-                          onClick={() => setTagSelectorOpen(true)}
-                          className="rounded-lg p-2 transition hover:opacity-80"
-                          style={{ backgroundColor: 'var(--color-accent)' }}
-                        >
-                          <Settings size={18} strokeWidth={2.5} />
-                        </button>
-                      )}
-                      {myPost && !editing && (
-                        <button
-                          onClick={handleEdit}
-                          className="rounded-lg p-2 transition hover:opacity-80"
-                          style={{ backgroundColor: 'var(--color-accent)' }}
-                        >
-                          <Edit size={18} strokeWidth={2.5} />
-                        </button>
-                      )}
-                      {editing && (
-                        <button
-                          onClick={handleCancel}
-                          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-4 py-2 text-sm transition"
-                        >
-                          Cancelar
-                        </button>
-                      )}
-                      <button
-                        onClick={handlePublish}
-                        disabled={!!myPost && !editing || publishing || !postContent.trim() || editing && postContent.trim() === myPost?.content}
-                        className="px-6 py-2 rounded-lg text-white font-medium transition"
-                        style={{
-                          backgroundColor: !postContent.trim() ? '#3f3f46' : 'var(--color-accent)',
-                          opacity: !editing && !!myPost || editing && postContent.trim() === myPost?.content ? 0.5 : 1,
-                          cursor: !postContent.trim() ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        {publishing ? 'Publicando...' : 'Publicar'}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="w-full flex items-center gap-1.5 text-zinc-400 text-sm">
-                    <Heart size={14} strokeWidth={2} className="text-red-400" fill="#f87171" />
-                    <NumberFlow value={postLikes} suffix={` like${postLikes !== 1 ? 's' : ''}`} />
-                  </div>
-                  <TagSelectorModal
-                    open={tagSelectorOpen}
-                    onClose={() => setTagSelectorOpen(false)}
-                    selected={selectedTagNames}
-                    onSave={handleSaveTags}
-                  />
-                </div>
-              </div>
+              <CreatePostView
+                postContent={postContent}
+                setPostContent={setPostContent}
+                editing={editing}
+                publishing={publishing}
+                myPost={myPost}
+                postLikes={postLikes}
+                selectedTagNames={selectedTagNames}
+                tagSelectorOpen={tagSelectorOpen}
+                setTagSelectorOpen={setTagSelectorOpen}
+                handlePublish={handlePublish}
+                handleSaveTags={handleSaveTags}
+                handleEdit={handleEdit}
+                handleCancel={handleCancel}
+                setConfirmingDelete={setConfirmingDelete}
+              />
             ) : view === 'notifications' ? (
               <NotificationsPanel />
             ) : view === 'chats' ? (
               <>
                 {chatsView === 'new' ? (
                   <NewChat onSelectFriend={handleSelectFriend} onBack={handleBackFromNewChat} />
-                ) : activeChat ? (
-                  <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} incomingCall={incomingCall} onJoinCall={(callerUser, sdp) => { setIncomingCall(null); setIncomingCallSeen(false); voiceCallRef.current?.joinCall(callerUser, sdp) }} onClearIncomingCall={() => { setIncomingCall(null); setIncomingCallSeen(false) }} />
                 ) : (
-                  <section className="flex-1 flex flex-col min-h-0">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-zinc-100 text-lg font-semibold">Chats</h2>
-                      <button
-                        onClick={handleNewChat}
-                        className="rounded-full p-2 transition hover:opacity-80"
-                        style={{ backgroundColor: 'var(--color-accent)' }}
-                      >
-                        <Plus size={20} strokeWidth={2.5} />
-                      </button>
+                  <div className="flex-1 flex flex-col lg:flex-row min-h-0 lg:gap-4">
+                    <div className={`${activeChat ? 'hidden lg:flex' : 'flex'} flex-col lg:w-96 min-h-0 shrink-0 lg:pr-4`}>
+                      <section className="flex-1 flex flex-col min-h-0">
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-zinc-100 text-lg font-semibold">Chats</h2>
+                          <button
+                            onClick={handleNewChat}
+                            className="rounded-full p-2 transition hover:opacity-80"
+                            style={{ backgroundColor: 'var(--color-accent)' }}
+                          >
+                            <Plus size={20} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                        <ChatsList
+                          onSelectChat={handleSelectChat}
+                          incomingCall={incomingCall}
+                        />
+                      </section>
                     </div>
-                    <ChatsList
-                      onSelectChat={handleSelectChat}
-                      incomingCall={incomingCall}
-                    />
-                  </section>
+                    <div className={`${activeChat ? 'flex' : 'hidden lg:flex'} flex-1 flex-col min-h-0`}>
+                      {activeChat ? (
+                        <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} incomingCall={incomingCall} onJoinCall={(callerUser, sdp) => { setIncomingCall(null); setIncomingCallSeen(false); voiceCallRef.current?.joinCall(callerUser, sdp) }} onClearIncomingCall={() => { setIncomingCall(null); setIncomingCallSeen(false) }} />
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center">
+                          <p className="text-zinc-500 text-lg">Selecciona un chat para empezar</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </>
             ) : (
               <>
                 {tab === 'add' && (
-                  <section className="flex-1 flex flex-col">
+                  <section className="flex-1 flex flex-col lg:max-w-xl lg:mx-auto lg:w-full">
                     <FriendSearch />
                     <div className="mt-8">
                       <PendingRequests />
@@ -811,13 +705,13 @@ export default function Home() {
                 )}
 
                 {tab === 'requests' && (
-                  <section className="flex-1 flex flex-col">
+                  <section className="flex-1 flex flex-col lg:max-w-xl lg:mx-auto lg:w-full">
                     <FriendRequests />
                   </section>
                 )}
 
                 {tab === 'friends' && (
-                  <section className="flex-1 flex flex-col">
+                  <section className="flex-1 flex flex-col lg:max-w-xl lg:mx-auto lg:w-full">
                     <FriendsList />
                   </section>
                 )}
@@ -828,235 +722,38 @@ export default function Home() {
       )}
 
       {view !== 'search' && (
-        <div className="fixed bottom-0 left-0 right-0 flex justify-center pb-4">
-          <div className="bg-zinc-900 rounded-2xl px-8 py-3 flex items-center justify-between mx-3 w-full max-w-sm shadow-lg">
-            <button
-              onClick={() => setView('home')}
-              className={`relative transition ${view === 'home' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
-            >
-              <HomeIcon size={24} />
-            </button>
-
-            <button
-              onClick={() => { setView('friends'); setTab('friends') }}
-              className={`relative transition ${view === 'friends' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
-            >
-              <Users size={24} />
-              {pendingRequestsCount > 0 && (
-                <span
-                  className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
-                  style={{
-                    backgroundColor: 'var(--color-accent)',
-                    color: '#fff',
-                    minWidth: 18,
-                    height: 18,
-                    padding: '0 5px',
-                  }}
-                >
-                  {pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setView('plus')}
-              className="rounded-full p-2 transition hover:opacity-80"
-              style={{ backgroundColor: 'var(--color-accent)' }}
-            >
-              <Plus size={24} strokeWidth={2.5} />
-            </button>
-
-            <button
-              onClick={() => setView('notifications')}
-              className={`relative transition ${view === 'notifications' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
-            >
-              <Bell size={24} />
-              {notificationsCount > 0 && (
-                <span
-                  className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
-                  style={{
-                    backgroundColor: 'var(--color-accent)',
-                    color: '#fff',
-                    minWidth: 18,
-                    height: 18,
-                    padding: '0 5px',
-                  }}
-                >
-                  {notificationsCount > 99 ? '99+' : notificationsCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => {
-                setView('chats')
-                setActiveChat(null)
-                setChatsView('list')
-              }}
-              className={`relative transition ${view === 'chats' ? 'text-zinc-100' : 'text-zinc-400 hover:text-zinc-100'}`}
-              style={incomingCall && !incomingCallSeen ? { color: '#22c55e' } : undefined}
-            >
-              <Send size={24} />
-              {incomingCall && !incomingCallSeen ? (
-                <span
-                  className="absolute -top-1.5 -right-1.5 rounded-full flex items-center justify-center"
-                  style={{
-                    backgroundColor: '#22c55e',
-                    color: '#fff',
-                    width: 18,
-                    height: 18,
-                  }}
-                >
-                  <Phone size={11} strokeWidth={3} />
-                </span>
-              ) : unreadTotal > 0 ? (
-                <span
-                  className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
-                  style={{
-                    backgroundColor: 'var(--color-accent)',
-                    color: '#fff',
-                    minWidth: 18,
-                    height: 18,
-                    padding: '0 5px',
-                  }}
-                >
-                  {unreadTotal > 99 ? '99+' : unreadTotal}
-                </span>
-              ) : null}
-            </button>
-          </div>
-        </div>
+        <MobileNav
+          view={view}
+          setView={setView}
+          setTab={setTab}
+          pendingRequestsCount={pendingRequestsCount}
+          notificationsCount={notificationsCount}
+          unreadTotal={unreadTotal}
+          incomingCall={incomingCall}
+          incomingCallSeen={incomingCallSeen}
+          setActiveChat={setActiveChat}
+          setChatsView={setChatsView}
+        />
       )}
 
-      {confirmingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmingDelete(false)} />
-          <div className="relative bg-zinc-900 rounded-xl px-6 py-5 w-full max-w-xs">
-            <p className="text-zinc-100 text-sm mb-4">
-              ¿Eliminar tu post?
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setConfirmingDelete(false)}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-4 py-2 text-sm transition"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm transition disabled:opacity-50"
-              >
-                {deleting ? 'Eliminando...' : 'Eliminar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmModal
+        open={confirmingDelete}
+        onClose={() => setConfirmingDelete(false)}
+        deleting={deleting}
+        handleDelete={handleDelete}
+      />
 
-      {preferencesOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => setPreferencesOpen(false)}>
-          <div
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-center p-4 border-b border-zinc-800 relative">
-              <h2 className="text-zinc-100 font-semibold text-lg">Preferencias</h2>
-              <button onClick={() => setPreferencesOpen(false)} className="absolute right-4 text-zinc-400 hover:text-zinc-200 transition p-1">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-4 space-y-3">
-              {prefTagNames.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {prefTagNames.map(name => (
-                    <span key={name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-sm font-medium text-zinc-200 bg-zinc-700">
-                      <span>#{name}</span>
-                      <button
-                        onClick={() => setPrefTagNames(prev => prev.filter(t => t !== name))}
-                        className="hover:text-zinc-100 ml-0.5"
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <input
-                value={prefSearch}
-                onChange={e => setPrefSearch(e.target.value)}
-                placeholder="Buscar etiquetas..."
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none"
-              />
-              <div className="max-h-[40vh] overflow-y-auto space-y-1">
-                {!prefSearch ? (
-                  <div className="space-y-1">
-                    {allTags.slice(0, 5).map(tag => (
-                      <button
-                        key={tag.id}
-                        onClick={() => {
-                          if (prefTagNames.includes(tag.name)) {
-                            setPrefTagNames(prev => prev.filter(t => t !== tag.name))
-                          } else if (prefTagNames.length < 5) {
-                            setPrefTagNames(prev => [...prev, tag.name])
-                          }
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition ${
-                          prefTagNames.includes(tag.name)
-                            ? 'bg-zinc-700 text-zinc-100'
-                            : 'text-zinc-300 hover:bg-zinc-800'
-                        }`}
-                      >
-                        <span>#{tag.name}</span>
-                        <span className="text-zinc-500 text-xs">{tag.post_count} posts</span>
-                      </button>
-                    ))}
-                    {allTags.length > 5 && (
-                      <p className="text-zinc-500 text-xs text-center pt-2">Buscá más etiquetas</p>
-                    )}
-                  </div>
-                ) : (() => {
-                  const filtered = allTags.filter(t => t.name.includes(prefSearch.toLowerCase()))
-                  return filtered.length === 0 ? (
-                    <p className="text-zinc-500 text-sm text-center py-4">No hay etiquetas con ese nombre</p>
-                  ) : (
-                    filtered.map(tag => (
-                      <button
-                        key={tag.id}
-                        onClick={() => {
-                          if (prefTagNames.includes(tag.name)) {
-                            setPrefTagNames(prev => prev.filter(t => t !== tag.name))
-                          } else if (prefTagNames.length < 5) {
-                            setPrefTagNames(prev => [...prev, tag.name])
-                          }
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition ${
-                          prefTagNames.includes(tag.name)
-                            ? 'bg-zinc-700 text-zinc-100'
-                            : 'text-zinc-300 hover:bg-zinc-800'
-                        }`}
-                      >
-                        <span>#{tag.name}</span>
-                        <span className="text-zinc-500 text-xs">{tag.post_count} posts</span>
-                      </button>
-                    ))
-                  )
-                })()}
-              </div>
-              <div className="flex justify-center pt-2">
-                <button
-                  onClick={handleSavePreferences}
-                  disabled={savingPrefs}
-                  className="px-4 py-2 rounded-lg text-sm text-white transition hover:opacity-90 disabled:opacity-50"
-                  style={{ backgroundColor: 'var(--color-accent)' }}
-                >
-                  {savingPrefs ? 'Guardando...' : 'Guardar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <PreferencesModal
+        open={preferencesOpen}
+        onClose={() => setPreferencesOpen(false)}
+        prefTagNames={prefTagNames}
+        setPrefTagNames={setPrefTagNames}
+        prefSearch={prefSearch}
+        setPrefSearch={setPrefSearch}
+        allTags={allTags}
+        savingPrefs={savingPrefs}
+        handleSavePreferences={handleSavePreferences}
+      />
 
       <VoiceCall ref={voiceCallRef} />
     </div>

@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -14,7 +14,7 @@ const generalLimiter = rateLimit({
   message: { error: 'Demasiadas solicitudes. Esperá un minuto.' },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || ipKeyGenerator(req),
 })
 
 export function mutationLimiter(req, res, next) {

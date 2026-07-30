@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Heart, Send, User, X } from 'lucide-react'
 import NumberFlow from '@number-flow/react'
 import { api } from '../lib/api'
@@ -27,8 +27,36 @@ export default function PublicProfile() {
   const [showFriends, setShowFriends] = useState(false)
   const [showAvatar, setShowAvatar] = useState(false)
 
-  const [post, setPost] = useState(null)
   const { isOnline } = useOnlineUsers()
+
+  function postFromFeedCache(postId) {
+    for (const key of ['all', 'friends']) {
+      const feedData = queryClient.getQueryData(['feed', key])
+      if (!feedData) continue
+      for (const page of feedData.pages) {
+        const found = page.posts.find(p => p.id === postId)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  const { data: post } = useQuery({
+    queryKey: ['user-post', username],
+    queryFn: async () => {
+      const res = await api(`/api/posts/user/${encodeURIComponent(username)}`)
+      if (!res.ok) return null
+      const data = await res.json()
+      const apiPost = data.post
+      if (!apiPost) return null
+      const cached = postFromFeedCache(apiPost.id)
+      if (cached) {
+        return { ...apiPost, liked_by_me: cached.liked_by_me, likes_count: cached.likes_count }
+      }
+      return apiPost
+    },
+    enabled: !!username && username.startsWith('@'),
+  })
 
   useEffect(() => {
     api('/api/auth/me')
@@ -47,40 +75,63 @@ export default function PublicProfile() {
     }
     setLoading(true)
     setError(null)
-    Promise.all([
-      api(`/api/profile/${encodeURIComponent(username)}`),
-      api(`/api/posts/user/${encodeURIComponent(username)}`).catch(() => null),
-    ])
-      .then(async ([profileRes, postRes]) => {
+    api(`/api/profile/${encodeURIComponent(username)}`)
+      .then(async (profileRes) => {
         if (!profileRes.ok) {
           if (profileRes.status === 404) throw new Error('Usuario no encontrado')
           throw new Error('Error al cargar perfil')
         }
         const profileData = await profileRes.json()
         setProfile(profileData.profile)
-        if (postRes?.ok) {
-          const postData = await postRes.json()
-          setPost(postData.post)
-        }
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [username])
 
+  function updateFeedCache(postId, updater) {
+    ;['all', 'friends'].forEach(key => {
+      queryClient.setQueryData(['feed', key], (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map(page => ({
+            ...page,
+            posts: page.posts.map(p => (p.id === postId ? updater(p) : p)),
+          })),
+        }
+      })
+    })
+  }
+
   const handlePostLike = (postId) => {
     if (!post) return
     const newLiked = !post.liked_by_me
-    setPost(prev => ({
+    queryClient.setQueryData(['user-post', username], (prev) => prev ? {
       ...prev,
       liked_by_me: newLiked,
       likes_count: newLiked ? prev.likes_count + 1 : prev.likes_count - 1,
+    } : prev)
+    updateFeedCache(postId, (p) => ({
+      ...p,
+      liked_by_me: newLiked,
+      likes_count: p.liked_by_me !== newLiked
+        ? (newLiked ? p.likes_count + 1 : p.likes_count - 1)
+        : p.likes_count,
     }))
     const endpoint = newLiked ? `/api/posts/${postId}/like` : `/api/posts/${postId}/unlike`
     api(endpoint, { method: 'POST' }).catch(() => {
-      setPost(prev => ({
+      queryClient.setQueryData(['user-post', username], (prev) => prev ? {
         ...prev,
         liked_by_me: !newLiked,
         likes_count: prev.likes_count + (newLiked ? -1 : 1),
+      } : prev)
+      const reverted = !newLiked
+      updateFeedCache(postId, (p) => ({
+        ...p,
+        liked_by_me: reverted,
+        likes_count: p.liked_by_me !== reverted
+          ? (reverted ? p.likes_count + 1 : p.likes_count - 1)
+          : p.likes_count,
       }))
     })
   }
@@ -120,6 +171,9 @@ export default function PublicProfile() {
     if (requestLoading) return
     setRequestLoading(true)
     setProfile(prev => ({ ...prev, friend_request_status: 'pending' }))
+    queryClient.invalidateQueries({ queryKey: ['feed'] })
+    queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
+    queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
     const res = await api('/api/friends/request', {
       method: 'POST',
       body: JSON.stringify({ username }),
@@ -128,6 +182,7 @@ export default function PublicProfile() {
       setProfile(prev => ({ ...prev, friend_request_status: null }))
       const data = await res.json()
       if (data.error) setError(data.error)
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
     }
     setRequestLoading(false)
   }

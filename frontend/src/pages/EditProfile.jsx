@@ -490,10 +490,10 @@ export default function EditProfile() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="max-w-lg mx-auto px-4 py-8">
         <button
-          onClick={() => navigate('/' + profile.username)}
+          onClick={() => navigate(-1)}
           className="text-zinc-500 hover:text-zinc-300 text-sm transition mb-8"
         >
-          <ArrowLeft size={14} className="inline -mt-0.5" /> Volver al perfil
+          <ArrowLeft size={14} className="inline -mt-0.5" /> Volver
         </button>
 
         <h1 className="text-xl font-semibold mb-8 text-center">Editar perfil</h1>

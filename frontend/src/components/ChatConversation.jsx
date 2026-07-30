@@ -553,7 +553,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
       )}
 
       {!isFriend ? (
-        <div className="flex flex-col items-center gap-2 py-4 px-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
+        <div className="flex flex-col items-center gap-2 py-4 px-4">
           <p className="text-zinc-400 text-sm text-center">
             No podés enviar mensajes a menos que sean amigos.
           </p>

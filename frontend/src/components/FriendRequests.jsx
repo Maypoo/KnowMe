@@ -53,7 +53,7 @@ export default function FriendRequests() {
     <div className="flex-1 flex flex-col">
       <h2 className="text-center text-zinc-300 text-lg font-semibold mb-6">Solicitudes de amistad</h2>
       {isLoading ? (
-        <ul className="space-y-3">
+        <ul className="space-y-1">
           {[1,2,3,4].map(i => (
             <li key={i} className="flex items-center justify-between bg-zinc-900 rounded-lg px-4 py-3">
               <div className="flex items-center gap-3">
@@ -72,7 +72,7 @@ export default function FriendRequests() {
             <p className="text-zinc-600 text-sm text-center">No hay nadie por aca.</p>
           </div>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-1">
           {requests.map(req => (
             <li key={req.id} className="flex items-center justify-between bg-zinc-900 rounded-lg px-4 py-3">
               <button onClick={() => navigate(`/${req.sender.username}`)} className="flex items-center gap-3 hover:opacity-80 transition">

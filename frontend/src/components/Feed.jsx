@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
-import { Heart, Loader2 } from 'lucide-react'
+import { Heart, Loader2, ChevronUp, ChevronDown } from 'lucide-react'
 import { api } from '../lib/api'
 import Avatar from './Avatar'
 import { SkeletonBox, SkeletonAvatar } from './Skeleton'
@@ -72,6 +72,23 @@ export default function Feed() {
   }, [feedIndex])
 
   useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const lastIndex = feedPosts.length - 1
+        if (e.key === 'ArrowDown') {
+          setFeedIndex(prev => {
+            const next = Math.min(prev + 1, lastIndex)
+            if (next === lastIndex && hasNextPage) loadNext()
+            return next
+          })
+        } else {
+          setFeedIndex(prev => Math.max(prev - 1, 0))
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+
     const container = feedRef.current
     if (!container) return
 
@@ -123,6 +140,7 @@ export default function Feed() {
     container.addEventListener('touchstart', onTouchStart, { passive: true })
     container.addEventListener('touchend', onTouchEnd, { passive: true })
     return () => {
+      window.removeEventListener('keydown', onKeyDown)
       container.removeEventListener('wheel', onWheel)
       container.removeEventListener('touchstart', onTouchStart)
       container.removeEventListener('touchend', onTouchEnd)
@@ -146,8 +164,8 @@ export default function Feed() {
 
   const handleFeedLike = (postId) => {
     const currentLiked = feedLikeState.current[postId]
-    const post = feedPosts.find(p => p.id === postId)
-    const newLiked = currentLiked === undefined ? !post?.liked_by_me : !currentLiked
+    const feedPost = feedPosts.find(p => p.id === postId)
+    const newLiked = currentLiked === undefined ? !feedPost?.liked_by_me : !currentLiked
     feedLikeState.current[postId] = newLiked
 
     updatePostInCache(postId, (p) => ({
@@ -155,6 +173,14 @@ export default function Feed() {
       likes_count: newLiked ? p.likes_count + 1 : p.likes_count - 1,
       liked_by_me: newLiked,
     }))
+
+    if (feedPost) {
+      queryClient.setQueryData(['user-post', feedPost.username], (prev) => prev ? {
+        ...prev,
+        liked_by_me: newLiked,
+        likes_count: newLiked ? prev.likes_count + 1 : prev.likes_count - 1,
+      } : prev)
+    }
 
     const endpoint = newLiked ? `/api/posts/${postId}/like` : `/api/posts/${postId}/unlike`
     api(endpoint, { method: 'POST' }).catch(() => {
@@ -164,6 +190,13 @@ export default function Feed() {
         likes_count: p.likes_count + (newLiked ? -1 : 1),
         liked_by_me: !newLiked,
       }))
+      if (feedPost) {
+        queryClient.setQueryData(['user-post', feedPost.username], (prev) => prev ? {
+          ...prev,
+          liked_by_me: !newLiked,
+          likes_count: prev.likes_count + (newLiked ? -1 : 1),
+        } : prev)
+      }
     })
   }
 
@@ -176,6 +209,8 @@ export default function Feed() {
       })
       if (res.ok) {
         updatePostInCache(post.id, (p) => ({ ...p, friend_request_status: 'pending' }))
+        queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
+        queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
       }
     } catch (err) {
       console.error(err)
@@ -184,9 +219,9 @@ export default function Feed() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <div className="relative px-4">
-        <div className="flex gap-1 bg-zinc-900 rounded-lg p-1">
+    <div className="flex-1 flex flex-col min-h-0 lg:relative">
+      <div className="relative px-4 lg:absolute lg:inset-x-0 lg:top-0 lg:z-10 lg:pointer-events-none lg:px-0">
+        <div className="flex gap-1 bg-zinc-900 rounded-lg p-1 lg:w-80 lg:mx-auto lg:pointer-events-auto">
           {MODES.map(m => {
             const active = feedMode === m.key
             return (
@@ -206,17 +241,40 @@ export default function Feed() {
         </div>
       </div>
 
+      <div className="hidden lg:flex lg:flex-col lg:absolute lg:right-4 lg:top-1/2 lg:-translate-y-1/2 lg:z-10 lg:gap-2">
+        <button
+          onClick={() => setFeedIndex(prev => Math.max(prev - 1, 0))}
+          className="rounded-full p-2 bg-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition"
+        >
+          <ChevronUp size={24} />
+        </button>
+        <button
+          onClick={() => {
+            setFeedIndex(prev => {
+              const lastIndex = feedPosts.length - 1
+              const next = Math.min(prev + 1, lastIndex)
+              if (next === lastIndex && hasNextPage) {
+                loadNext()
+              }
+              return next
+            })
+          }}
+          className="rounded-full p-2 bg-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition"
+        >
+          <ChevronDown size={24} />
+        </button>
+      </div>
       <div ref={feedRef} className="flex-1 overflow-hidden overscroll-none relative">
       {feedLoading ? (
-        <div className="h-full flex flex-col items-center justify-center px-6">
-          <div className="flex items-center gap-3 mb-6">
+        <div className="h-full flex flex-col items-center justify-center px-6 lg:px-0">
+          <div className="flex items-center gap-3 lg:gap-4 mb-6 lg:mb-8">
             <SkeletonAvatar size={40} />
-            <SkeletonBox className="h-4 w-28" />
+            <SkeletonBox className="h-4 lg:h-5 w-28 lg:w-32" />
           </div>
-          <SkeletonBox className="w-full max-w-md h-40 mb-6" />
-          <div className="flex items-center gap-3">
-            <SkeletonBox className="h-10 w-28 rounded-xl" />
-            {feedMode === 'all' && <SkeletonBox className="h-10 w-36 rounded-xl" />}
+          <SkeletonBox className="w-full max-w-md lg:max-w-xl h-40 lg:h-48 mb-6 lg:mb-8" />
+          <div className="flex items-center gap-3 lg:gap-4">
+            <SkeletonBox className="h-10 lg:h-12 w-28 lg:w-32 rounded-xl" />
+            {feedMode === 'all' && <SkeletonBox className="h-10 lg:h-12 w-36 lg:w-44 rounded-xl" />}
           </div>
         </div>
       ) : feedPosts.length === 0 ? (
@@ -231,24 +289,24 @@ export default function Feed() {
           style={{ transform: `translateY(-${feedIndex * 100}%)` }}
         >
           {feedPosts.map((post, i) => (
-            <div key={post.id} className="h-full flex flex-col items-center justify-center px-6">
+            <div key={post.id} className="h-full flex flex-col items-center justify-center px-6 lg:px-0">
               {i === feedPosts.length - 1 && isFetchingNextPage && (
                 <div className="absolute bottom-4 flex items-center gap-2 text-zinc-400 text-sm">
                   <Loader2 size={16} className="animate-spin" />
                   Cargando más...
                 </div>
               )}
-              <button onClick={() => navigate('/' + post.username)} className="flex items-center gap-3 mb-6 hover:opacity-80 transition">
+              <button onClick={() => navigate('/' + post.username)} className="flex items-center gap-3 mb-6 lg:mb-8 hover:opacity-80 transition">
                 <Avatar src={post.avatar_url} size={40} />
-                <span className="text-zinc-100 font-medium text-sm">{post.display_name || post.username}</span>
+                <span className="text-zinc-100 font-medium text-sm lg:text-base">{post.display_name || post.username}</span>
               </button>
-              <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-                <p className="text-zinc-100 text-lg leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
+              <div className="w-full max-w-md lg:max-w-xl bg-zinc-900 lg:bg-zinc-900/90 border border-zinc-800 rounded-xl p-6 lg:p-8 mb-6 lg:mb-8 lg:shadow-xl lg:shadow-black/25 lg:backdrop-blur-sm lg:border-zinc-700/50">
+                <p className="text-zinc-100 text-lg lg:text-xl leading-relaxed lg:leading-relaxed whitespace-pre-wrap break-words lg:tracking-wide">{post.content}</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 lg:gap-4">
                 <button
                   onClick={() => handleFeedLike(post.id)}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl transition hover:opacity-90 active:scale-95"
+                  className="flex items-center gap-2 px-5 py-2.5 lg:px-6 lg:py-3 rounded-xl transition hover:opacity-90 active:scale-95"
                   style={{ backgroundColor: 'var(--color-accent)' }}
                 >
                   <Heart
@@ -256,7 +314,7 @@ export default function Feed() {
                     strokeWidth={2.5}
                     className={post.liked_by_me ? 'text-white fill-white' : 'text-white'}
                   />
-                  <span className="text-sm font-medium text-white">
+                  <span className="text-sm lg:text-base font-medium text-white">
                     {post.likes_count}
                   </span>
                 </button>
@@ -264,7 +322,7 @@ export default function Feed() {
                   if (post.friend_request_status === 'pending') {
                     return (
                       <span
-                        className="rounded-xl px-4 py-2.5 text-sm text-white opacity-60"
+                        className="rounded-xl px-4 py-2.5 lg:px-6 lg:py-3 text-sm lg:text-base text-white opacity-60"
                         style={{ backgroundColor: 'var(--color-accent)' }}
                       >
                         Solicitud enviada
@@ -275,7 +333,7 @@ export default function Feed() {
                       <button
                         onClick={() => handleSendFriendRequest(post)}
                         disabled={sendingRequest === post.id}
-                        className="rounded-xl px-4 py-2.5 text-sm text-white transition hover:opacity-90 disabled:opacity-50"
+                        className="rounded-xl px-4 py-2.5 lg:px-6 lg:py-3 text-sm lg:text-base text-white transition hover:opacity-90 disabled:opacity-50"
                         style={{ backgroundColor: 'var(--color-accent)' }}
                       >
                         {sendingRequest === post.id ? 'Enviando...' : 'Enviar solicitud'}

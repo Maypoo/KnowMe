@@ -126,13 +126,13 @@ export default function NotificationsPanel() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-zinc-300 text-lg font-semibold">Notificaciones</h2>
+      <div className="flex-1 flex flex-col lg:max-w-lg lg:mx-auto lg:w-full">
+        <div className="flex items-center justify-between mb-6 lg:grid lg:grid-cols-3 lg:sticky lg:top-0 lg:bg-zinc-950 lg:z-10 lg:py-4 lg:mb-0 lg:border-b lg:border-zinc-800">
+          <h2 className="text-zinc-300 text-lg font-semibold lg:text-center lg:col-start-2">Notificaciones</h2>
         </div>
         <ul className="space-y-1">
           {[1,2,3,4,5].map(i => (
-            <li key={i} className="flex items-center bg-zinc-900 rounded-lg px-3 py-3">
+            <li key={i} className="flex items-center bg-zinc-900 rounded-lg px-3 py-3 lg:bg-transparent lg:rounded-none lg:px-0 lg:border-b lg:border-zinc-800/50 lg:py-3.5">
               <div className="flex items-center gap-3">
                 <SkeletonAvatar size={32} />
                 <SkeletonBox className="h-4 w-48" />
@@ -145,11 +145,11 @@ export default function NotificationsPanel() {
   }
 
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-zinc-300 text-lg font-semibold">Notificaciones</h2>
+    <div className="flex-1 flex flex-col lg:max-w-lg lg:mx-auto lg:w-full">
+      <div className="flex items-center justify-between mb-6 lg:grid lg:grid-cols-3 lg:sticky lg:top-0 lg:bg-zinc-950 lg:z-10 lg:py-4 lg:mb-0 lg:border-b lg:border-zinc-800">
+        <h2 className="text-zinc-300 text-lg font-semibold lg:text-center lg:col-start-2">Notificaciones</h2>
         {notifications.length > 0 && (
-          <button onClick={handleClearAll} className="text-xs text-zinc-500 hover:text-zinc-300 transition">
+          <button onClick={handleClearAll} className="text-xs text-zinc-500 hover:text-zinc-300 transition lg:justify-self-end">
             Limpiar todo
           </button>
         )}
@@ -161,7 +161,7 @@ export default function NotificationsPanel() {
       ) : (
         <ul className="space-y-1">
           {notifications.map(notif => (
-            <li key={notif.id} className="flex items-center justify-between bg-zinc-900 rounded-lg px-3 py-3">
+            <li key={notif.id} className="flex items-center justify-between bg-zinc-900 rounded-lg px-3 py-3 lg:bg-transparent lg:rounded-none lg:px-0 lg:border-b lg:border-zinc-800/50 lg:py-3.5">
               <div className="flex items-center gap-3 min-w-0">
                 <button onClick={() => navigate('/' + notif.fromUser.username)} className="shrink-0">
                   <Avatar src={notif.fromUser.avatar_url} size={32} />

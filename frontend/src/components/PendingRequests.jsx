@@ -43,6 +43,7 @@ export default function PendingRequests() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
       queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
     },
   })
 
