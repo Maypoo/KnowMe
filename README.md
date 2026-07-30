@@ -12,10 +12,17 @@
   <img src="https://img.shields.io/badge/WebRTC-333333?style=flat-square" alt="WebRTC" />
 </p>
 
-<img width="1920" height="1080" alt="KnowMe" src="https://github.com/user-attachments/assets/b0e3b762-e416-4da7-80f4-f2f1e15ec45c" />
-
-<h2 align="center">Descargar aplicación de escritorio para Windows</h2>
+<h3 align="center">Descargar aplicación de escritorio para Windows</h3>
 
 Esta es la primera versión de escritorio de KnowMe. Es un pre-release, no es una versión estable, por lo que es posible encontrar errores, funciones incompletas o cambios en futuras actualizaciones. La aplicación ya se puede descargar y probar. Si encontrás algún error o tenés alguna sugerencia, decírmelo sirve para seguir mejorando el proyecto. :)
 
 Última versión: https://github.com/Maypoo/KnowMe/releases
+
+
+<img width="1282" height="752" src="https://github.com/user-attachments/assets/b8f65127-d302-42a4-b43c-03eed857f71a" />
+<br>
+<br>
+<img width="1282" height="752" src="https://github.com/user-attachments/assets/3bdd99d0-fb50-497d-815f-93734bb46e3b" />
+<br>
+<br>
+<img width="1282" height="752" src="https://github.com/user-attachments/assets/c73bbd58-271b-48c5-93fd-f052f2f1ecd1" />
