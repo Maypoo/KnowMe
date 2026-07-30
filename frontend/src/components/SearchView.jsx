@@ -8,7 +8,7 @@ export default function SearchView({
   searched, setSearched,
   recentSearches, setRecentSearches,
   handleSearch, handleSearchBack, addToRecentSearches,
-  navigate, view, tab, activeChat, chatsView
+  navigate, setView, view, tab, activeChat, chatsView
 }) {
   return (
     <div className="lg:ml-64 flex-1 flex flex-col min-h-0 px-6 py-6 lg:justify-center lg:items-center lg:px-0 lg:py-0">

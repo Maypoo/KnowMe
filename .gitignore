@@ -3,5 +3,10 @@ node_modules/
 dist/
 .env
 .env.local
+.env.production
 *.log
 .DS_Store
+
+# Tauri
+frontend/src-tauri/target/
+frontend/src-tauri/gen/
