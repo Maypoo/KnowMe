@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { sanitize, escapeILike } from '../lib/utils.js'
 import { resolveTagNames, syncPostTags } from '../lib/tags.js'
+import { getBlockRowsForUser, getBlockStatus, formatExcludedIds } from '../lib/blocks.js'
 import { getIO } from '../src/socket.js'
 
 const pendingLikeToggles = new Map()
@@ -141,6 +142,13 @@ export const feed = asyncHandler(async (req, res) => {
     query = query.not('user_id', 'in', `(${friendIds.map(id => `"${id}"`).join(',')})`)
   }
 
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+  const excludedStr = formatExcludedIds(excluded)
+  if (excludedStr) {
+    query = query.not('user_id', 'in', excludedStr)
+  }
+
   const { data: posts, error } = await query
 
   if (error) return res.status(500).json({ error: 'Error al obtener feed' })
@@ -257,7 +265,12 @@ export const friendsFeed = asyncHandler(async (req, res) => {
   if (sent) friendIds.push(...sent.map(r => r.receiver_id))
   if (received) friendIds.push(...received.map(r => r.sender_id))
 
-  if (friendIds.length === 0) {
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+
+  const visibleFriendIds = friendIds.filter(id => !excluded.has(id))
+
+  if (visibleFriendIds.length === 0) {
     return res.json({ posts: [], total: 0, page, limit, hasMore: false })
   }
 
@@ -271,7 +284,7 @@ export const friendsFeed = asyncHandler(async (req, res) => {
       user_id,
       post_likes(count)
     `)
-    .in('user_id', friendIds)
+    .in('user_id', visibleFriendIds)
 
   const { data: posts, error } = await query
 
@@ -341,6 +354,11 @@ export const like = asyncHandler(async (req, res) => {
   if (!post) return res.status(404).json({ error: 'Post no encontrado' })
   if (post.user_id === req.user.id) {
     return res.status(400).json({ error: 'No podés dar like a tu propio post' })
+  }
+
+  const blockStatus = await getBlockStatus(req.user.id, post.user_id)
+  if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+    return res.status(403).json({ error: 'No podés dar like a este post' })
   }
 
   const key = `${req.user.id}:${req.params.id}`
@@ -421,6 +439,11 @@ export const unlike = asyncHandler(async (req, res) => {
   if (postError) return res.status(500).json({ error: 'Error al verificar post' })
   if (!post) return res.status(404).json({ error: 'Post no encontrado' })
 
+  const blockStatus = await getBlockStatus(req.user.id, post.user_id)
+  if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+    return res.status(403).json({ error: 'No podés quitar el like de este post' })
+  }
+
   const key = `${req.user.id}:${req.params.id}`
   if (pendingLikeToggles.has(key)) {
     clearTimeout(pendingLikeToggles.get(key).timer)
@@ -458,6 +481,13 @@ export const getUserPosts = asyncHandler(async (req, res) => {
 
   if (!profile) {
     return res.status(404).json({ error: 'Usuario no encontrado' })
+  }
+
+  if (req.user.id !== profile.id) {
+    const blockStatus = await getBlockStatus(req.user.id, profile.id)
+    if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+      return res.status(403).json({ blocked: true, error: 'No podés ver esta publicación' })
+    }
   }
 
   const { data: post, error } = await supabase

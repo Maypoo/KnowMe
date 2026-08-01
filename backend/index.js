@@ -16,6 +16,7 @@ import usersRoutes from './routes/users.js'
 import friendsRoutes from './routes/friends.js'
 import followRoutes from './routes/follow.js'
 import notificationsRoutes from './routes/notifications.js'
+import blocksRoutes from './routes/blocks.js'
 import chatsRoutes from './routes/chats.js'
 import callsRoutes from './routes/calls.js'
 import postsRoutes from './routes/posts.js'
@@ -50,6 +51,7 @@ app.use('/api', usersRoutes)
 app.use('/api', friendsRoutes)
 app.use('/api', followRoutes)
 app.use('/api', notificationsRoutes)
+app.use('/api', blocksRoutes)
 app.use('/api', chatsRoutes)
 app.use('/api', callsRoutes)
 app.use('/api', postsRoutes)

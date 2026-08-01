@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { sanitize } from '../lib/utils.js'
+import { getBlockRowsForUser, formatExcludedIds } from '../lib/blocks.js'
 import { getIO } from '../src/socket.js'
 
 export const list = asyncHandler(async (req, res) => {
@@ -15,7 +16,15 @@ export const list = asyncHandler(async (req, res) => {
     return res.json({ notifications: [] })
   }
 
-  const fromIds = [...new Set(notifications.map(n => n.from_user_id))]
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+
+  const visible = notifications.filter(n => !excluded.has(n.from_user_id))
+  if (visible.length === 0) {
+    return res.json({ notifications: [] })
+  }
+
+  const fromIds = [...new Set(visible.map(n => n.from_user_id))]
 
   const [{ data: fromProfiles }, { data: followingRows }] = await Promise.all([
     supabase
@@ -38,7 +47,7 @@ export const list = asyncHandler(async (req, res) => {
     }
   }
 
-  const enriched = notifications.map(n => ({
+  const enriched = visible.map(n => ({
     id: n.id,
     type: n.type,
     read: n.read,
@@ -55,11 +64,20 @@ export const list = asyncHandler(async (req, res) => {
 })
 
 export const unreadCount = asyncHandler(async (req, res) => {
-  const { count } = await supabase
+  let query = supabase
     .from('notifications')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', req.user.id)
     .eq('read', false)
+
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+  const excludedStr = formatExcludedIds(excluded)
+  if (excludedStr) {
+    query = query.not('from_user_id', 'in', excludedStr)
+  }
+
+  const { count } = await query
 
   res.json({ count: count || 0 })
 })

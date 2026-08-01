@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Heart, Send, User, X } from 'lucide-react'
+import { ArrowLeft, Ban, Heart, MoreVertical, Send, User, X } from 'lucide-react'
 import NumberFlow from '@number-flow/react'
 import { api } from '../lib/api'
+import { socket } from '../lib/socket'
 import { useOnlineUsers } from '../lib/OnlineUsersContext'
 import { useTitleBar } from '../lib/TitleBarContext'
 import { timeAgo } from '../lib/timeAgo'
@@ -22,6 +23,12 @@ export default function PublicProfile() {
   const [loading, setLoading] = useState(true)
   const [currentUserLoading, setCurrentUserLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [blocked, setBlocked] = useState(null)
+  const [confirmBlock, setConfirmBlock] = useState(false)
+  const [blocking, setBlocking] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
+  const profileLoadId = useRef(0)
 
   const [requestLoading, setRequestLoading] = useState(false)
   const [showFollowers, setShowFollowers] = useState(false)
@@ -68,8 +75,60 @@ export default function PublicProfile() {
       .finally(() => setCurrentUserLoading(false))
   }, [])
 
+  const fetchProfile = useCallback(async () => {
+    const currentId = ++profileLoadId.current
+    const res = await api(`/api/profile/${encodeURIComponent(username)}`)
+    if (currentId !== profileLoadId.current) return { data: null, isStale: true }
+    if (!res.ok) {
+      if (res.status === 404) throw new Error('Usuario no encontrado')
+      throw new Error('Error al cargar perfil')
+    }
+    const data = await res.json()
+    return { data, isStale: false }
+  }, [username])
+
+  const loadProfile = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    setTitle({ key: 'profile', label: null })
+    let isStale = false
+    try {
+      const result = await fetchProfile()
+      isStale = result.isStale
+      if (isStale) return
+      const data = result.data
+      if (data.blocked) {
+        setProfile(null)
+        setBlocked({ blockedByMe: data.blockedByMe })
+        setTitle({ key: 'profile', label: null })
+        return
+      }
+      setBlocked(null)
+      setProfile(data.profile)
+      const displayName = data.profile.display_name || data.profile.username
+      setTitle({ key: 'profile', label: `Perfil (${displayName})` })
+    } catch (err) {
+      setError(err.message)
+      setTitle({ key: 'profile', label: null })
+    } finally {
+      if (!isStale) setLoading(false)
+    }
+  }, [fetchProfile, setTitle])
+
+  const refreshProfile = useCallback(async () => {
+    try {
+      const result = await fetchProfile()
+      if (result.isStale) return
+      const data = result.data
+      if (!data || data.blocked) return
+      setBlocked(null)
+      setProfile(data.profile)
+    } catch (err) {
+      console.error(err)
+    }
+  }, [fetchProfile])
+
   useEffect(() => {
-    let cancelled = false
     if (!username.startsWith('@')) {
       setError('Usuario no encontrado')
       setLoading(false)
@@ -77,34 +136,32 @@ export default function PublicProfile() {
       setTitle({ key: 'profile', label: null })
       return
     }
-    setLoading(true)
-    setError(null)
-    setTitle({ key: 'profile', label: null })
-    api(`/api/profile/${encodeURIComponent(username)}`)
-      .then(async (profileRes) => {
-        if (cancelled) return
-        if (!profileRes.ok) {
-          if (profileRes.status === 404) throw new Error('Usuario no encontrado')
-          throw new Error('Error al cargar perfil')
-        }
-        const profileData = await profileRes.json()
-        setProfile(profileData.profile)
-        const displayName = profileData.profile.display_name || profileData.profile.username
-        setTitle({ key: 'profile', label: `Perfil (${displayName})` })
-      })
-      .catch(err => {
-        if (cancelled) return
-        setError(err.message)
-        setTitle({ key: 'profile', label: null })
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+    loadProfile()
     return () => {
-      cancelled = true
       setTitle({ key: 'default', label: null })
     }
-  }, [username])
+  }, [username, loadProfile])
+
+  useEffect(() => {
+    if (!profile) return
+    const handleBlocked = (data) => {
+      if (data.blockerId === profile.id) {
+        loadProfile()
+      }
+    }
+    socket.on('user:blocked', handleBlocked)
+    return () => socket.off('user:blocked', handleBlocked)
+  }, [profile, loadProfile])
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   function updateFeedCache(postId, updater) {
     ;['all', 'friends'].forEach(key => {
@@ -192,17 +249,62 @@ export default function PublicProfile() {
     queryClient.invalidateQueries({ queryKey: ['feed'] })
     queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
     queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
-    const res = await api('/api/friends/request', {
-      method: 'POST',
-      body: JSON.stringify({ username }),
-    })
-    if (!res.ok) {
-      setProfile(prev => ({ ...prev, friend_request_status: null }))
-      const data = await res.json()
-      if (data.error) setError(data.error)
-      queryClient.invalidateQueries({ queryKey: ['feed'] })
+    try {
+      const res = await api('/api/friends/request', {
+        method: 'POST',
+        body: JSON.stringify({ username }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        if (data?.error) setError(data.error)
+        queryClient.invalidateQueries({ queryKey: ['feed'] })
+      }
+    } catch (err) {
+      console.error(err)
     }
+    await refreshProfile()
     setRequestLoading(false)
+  }
+
+  const handleBlock = async () => {
+    if (blocking) return
+    setBlocking(true)
+    try {
+      const res = await api(`/api/blocks/${encodeURIComponent(username)}`, { method: 'POST' })
+      if (res.ok) {
+        setBlocked({ blockedByMe: true })
+        setProfile(null)
+        setConfirmBlock(false)
+        sessionStorage.removeItem('chatReturn')
+        queryClient.invalidateQueries({ queryKey: ['feed'] })
+        queryClient.invalidateQueries({ queryKey: ['friends'] })
+        queryClient.invalidateQueries({ queryKey: ['chats'] })
+        queryClient.invalidateQueries({ queryKey: ['chatsUnread'] })
+        queryClient.invalidateQueries({ queryKey: ['notifications'] })
+        queryClient.invalidateQueries({ queryKey: ['notificationsUnread'] })
+        queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
+        queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
+        queryClient.invalidateQueries({ queryKey: ['user-post', username] })
+      }
+    } catch (err) {
+      console.error(err)
+    }
+    setBlocking(false)
+  }
+
+  const handleUnblock = async () => {
+    if (blocking) return
+    setBlocking(true)
+    try {
+      const res = await api(`/api/blocks/${encodeURIComponent(username)}`, { method: 'DELETE' })
+      if (res.ok) {
+        setBlocked(null)
+        await loadProfile()
+      }
+    } catch (err) {
+      console.error(err)
+    }
+    setBlocking(false)
   }
 
   if (loading || currentUserLoading) {
@@ -248,17 +350,88 @@ export default function PublicProfile() {
     )
   }
 
+  if (blocked) {
+    return (
+      <div className="min-h-full bg-zinc-950 text-zinc-100">
+        <div className="max-w-lg mx-auto px-4 py-8 flex flex-col items-center">
+          <button
+            onClick={() => navigate('/')}
+            className="text-zinc-500 hover:text-zinc-300 text-sm transition mb-12 self-start"
+          >
+            <ArrowLeft size={14} className="inline -mt-0.5" /> Volver
+          </button>
+          <div className="flex flex-col items-center gap-4 mt-6">
+            <div className="rounded-full p-5 bg-zinc-900">
+              <Ban size={40} className="text-zinc-500" />
+            </div>
+            <h1 className="text-xl font-semibold text-center">
+              {blocked.blockedByMe ? 'Bloqueaste a este usuario' : 'Este usuario te bloqueó'}
+            </h1>
+            <p className="text-zinc-500 text-sm text-center max-w-xs">
+              {blocked.blockedByMe
+                ? 'No vas a ver su información ni él la tuya. Podés desbloquearlo cuando quieras.'
+                : 'No vas a poder ver su información ni él la tuya.'}
+            </p>
+            {blocked.blockedByMe ? (
+              <button
+                onClick={handleUnblock}
+                disabled={blocking}
+                className="mt-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
+              >
+                {blocking ? 'Desbloqueando...' : 'Desbloquear'}
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/')}
+                className="mt-4 text-zinc-500 hover:text-zinc-300 text-sm transition"
+              >
+                Volver al inicio
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 
   return (
     <div className="min-h-full bg-zinc-950 text-zinc-100">
       <div className="max-w-lg mx-auto px-4 py-8">
-        <button
-          onClick={() => navigate('/')}
-          className="text-zinc-500 hover:text-zinc-300 text-sm transition mb-8"
-        >
-          <ArrowLeft size={14} className="inline -mt-0.5" /> Volver
-        </button>
+        <div className="flex items-center justify-between mb-8">
+          <button
+            onClick={() => navigate('/')}
+            className="text-zinc-500 hover:text-zinc-300 text-sm transition"
+          >
+            <ArrowLeft size={14} className="inline -mt-0.5" /> Volver
+          </button>
+          {currentUser?.username?.toLowerCase() !== username.toLowerCase() && (
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen(prev => !prev)}
+                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+                title="Más opciones"
+              >
+                <MoreVertical size={20} />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-44 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1 z-50">
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setConfirmBlock(true)
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-zinc-800 transition"
+                  >
+                    <Ban size={14} className="inline mr-2 -mt-0.5" />
+                    Bloquear usuario
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex flex-col items-center gap-4">
           <button onClick={() => setShowAvatar(true)} className="transition active:scale-95">
             <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-zinc-800 cursor-pointer" />
@@ -464,6 +637,31 @@ export default function PublicProfile() {
                   <User size={96} className="text-zinc-400" />
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmBlock && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmBlock(false)} />
+          <div className="relative bg-zinc-900 rounded-xl px-6 py-5 w-full max-w-xs">
+            <p className="text-zinc-100 text-sm mb-4">
+              ¿Bloquear a {profile.username}? No van a poder verse la información entre ustedes.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmBlock(false)}
+                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-4 py-2 text-sm transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleBlock}
+                disabled={blocking}
+                className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm transition disabled:opacity-50"
+              >
+                {blocking ? 'Bloqueando...' : 'Bloquear'}
+              </button>
             </div>
           </div>
         </div>

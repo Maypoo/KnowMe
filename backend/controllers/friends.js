@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { sanitize, escapeILike } from '../lib/utils.js'
+import { getBlockRowsForUser, getBlockStatus, formatExcludedIds } from '../lib/blocks.js'
 import { getIO } from '../src/socket.js'
 
 export const request = asyncHandler(async (req, res) => {
@@ -26,6 +27,11 @@ export const request = asyncHandler(async (req, res) => {
 
   if (target.id === req.user.id) {
     return res.status(400).json({ error: 'No podés enviarte una solicitud a vos mismo' })
+  }
+
+  const blockStatus = await getBlockStatus(req.user.id, target.id)
+  if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+    return res.status(403).json({ error: 'No podés enviar una solicitud a este usuario' })
   }
 
   const { data: existing } = await supabase
@@ -89,6 +95,9 @@ export const listRequests = asyncHandler(async (req, res) => {
     return res.json({ requests: [] })
   }
 
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+
   const senderIds = requests.map(r => r.sender_id)
   const { data: senders } = await supabase
     .from('profiles')
@@ -102,22 +111,33 @@ export const listRequests = asyncHandler(async (req, res) => {
     }
   }
 
-  const enriched = requests.map(r => ({
-    id: r.id,
-    sender: { id: r.sender_id, username: senderMap[r.sender_id]?.username || 'Desconocido', avatar_url: senderMap[r.sender_id]?.avatar_url || null },
-    status: r.status,
-    createdAt: r.created_at,
-  }))
+  const enriched = requests
+    .filter(r => !excluded.has(r.sender_id))
+    .map(r => ({
+      id: r.id,
+      sender: { id: r.sender_id, username: senderMap[r.sender_id]?.username || 'Desconocido', avatar_url: senderMap[r.sender_id]?.avatar_url || null },
+      status: r.status,
+      createdAt: r.created_at,
+    }))
 
   res.json({ requests: enriched })
 })
 
 export const requestsCount = asyncHandler(async (req, res) => {
-  const { count } = await supabase
+  let query = supabase
     .from('friend_requests')
     .select('*', { count: 'exact', head: true })
     .eq('receiver_id', req.user.id)
     .eq('status', 'pending')
+
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+  const excludedStr = formatExcludedIds(excluded)
+  if (excludedStr) {
+    query = query.not('sender_id', 'in', excludedStr)
+  }
+
+  const { count } = await query
 
   res.json({ count: count || 0 })
 })
@@ -145,6 +165,11 @@ export const respond = asyncHandler(async (req, res) => {
 
   if (request.status !== 'pending') {
     return res.status(400).json({ error: 'Esta solicitud ya fue respondida' })
+  }
+
+  const blockStatus = await getBlockStatus(req.user.id, request.sender_id)
+  if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+    return res.status(403).json({ error: 'No podés responder esta solicitud' })
   }
 
   const io = getIO()
@@ -257,6 +282,9 @@ export const list = asyncHandler(async (req, res) => {
   if (sent) friendIds.push(...sent.map(r => r.receiver_id))
   if (received) friendIds.push(...received.map(r => r.sender_id))
 
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+
   if (friendIds.length === 0) {
     return res.json({ friends: [] })
   }
@@ -266,12 +294,14 @@ export const list = asyncHandler(async (req, res) => {
     .select('id, username, display_name, avatar_url, last_seen_at, show_activity')
     .in('id', friendIds)
 
-  const friends = (profiles || []).map(p => ({
-    id: p.id,
-    username: sanitize(p.display_name || p.username),
-    avatar_url: p.avatar_url,
-    last_seen_at: p.show_activity ? p.last_seen_at : null,
-  }))
+  const friends = (profiles || [])
+    .filter(p => !excluded.has(p.id))
+    .map(p => ({
+      id: p.id,
+      username: sanitize(p.display_name || p.username),
+      avatar_url: p.avatar_url,
+      last_seen_at: p.show_activity ? p.last_seen_at : null,
+    }))
 
   res.json({ friends })
 })
@@ -288,6 +318,9 @@ export const pending = asyncHandler(async (req, res) => {
     return res.json({ requests: [] })
   }
 
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+
   const receiverIds = requests.map(r => r.receiver_id)
   const { data: receivers } = await supabase
     .from('profiles')
@@ -301,11 +334,13 @@ export const pending = asyncHandler(async (req, res) => {
     }
   }
 
-  const enriched = requests.map(r => ({
-    id: r.id,
-    receiver: { id: r.receiver_id, username: receiverMap[r.receiver_id]?.username || 'Desconocido', avatar_url: receiverMap[r.receiver_id]?.avatar_url || null },
-    createdAt: r.created_at,
-  }))
+  const enriched = requests
+    .filter(r => !excluded.has(r.receiver_id))
+    .map(r => ({
+      id: r.id,
+      receiver: { id: r.receiver_id, username: receiverMap[r.receiver_id]?.username || 'Desconocido', avatar_url: receiverMap[r.receiver_id]?.avatar_url || null },
+      createdAt: r.created_at,
+    }))
 
   res.json({ requests: enriched })
 })
@@ -435,6 +470,9 @@ export const getUserFriends = asyncHandler(async (req, res) => {
   if (sent) friendIds.push(...sent.map(r => r.receiver_id))
   if (received) friendIds.push(...received.map(r => r.sender_id))
 
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+
   if (friendIds.length === 0) {
     return res.json({ friends: [] })
   }
@@ -444,6 +482,8 @@ export const getUserFriends = asyncHandler(async (req, res) => {
     .select('id, username, display_name, avatar_url')
     .in('id', friendIds)
 
-  const mapped = (profiles || []).map(p => ({ ...p, username: p.display_name || p.username }))
+  const mapped = (profiles || [])
+    .filter(p => !excluded.has(p.id))
+    .map(p => ({ ...p, username: p.display_name || p.username }))
   res.json({ friends: mapped })
 })

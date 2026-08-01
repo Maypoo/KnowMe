@@ -1,5 +1,6 @@
 import { Server } from 'socket.io'
 import { supabase } from '../lib/supabase.js'
+import { getInvisibleIds } from '../lib/blocks.js'
 
 let io
 const onlineUsers = new Set()
@@ -68,9 +69,20 @@ export function setupSocket(server) {
   io.on('connection', async (socket) => {
     socket.join(socket.user.id)
     onlineUsers.add(socket.user.id)
+    try {
+      socket.invisible = await getInvisibleIds(socket.user.id)
+    } catch (err) {
+      console.error('Error al cargar bloques:', err)
+      socket.invisible = new Set()
+    }
 
     if (socket.showActivity) {
-      socket.broadcast.emit('user:online', { userId: socket.user.id })
+      for (const other of io.sockets.sockets.values()) {
+        if (other.user.id === socket.user.id) continue
+        if (socket.invisible.has(other.user.id)) continue
+        if (other.invisible?.has(socket.user.id)) continue
+        other.emit('user:online', { userId: socket.user.id })
+      }
     }
 
     const { data: onlineProfiles } = await supabase
@@ -79,12 +91,15 @@ export function setupSocket(server) {
       .in('id', [...onlineUsers])
       .eq('show_activity', true)
 
-    const visibleIds = onlineProfiles ? onlineProfiles.map(p => p.id) : []
+    const visibleIds = onlineProfiles
+      ? onlineProfiles.map(p => p.id).filter(id => !socket.invisible.has(id))
+      : []
     socket.emit('users:online', { userIds: visibleIds })
 
     socket.on('chat:typing', (data) => {
       const { targetUserId, chatId } = data
       if (!targetUserId || !chatId) return
+      if (socket.invisible.has(targetUserId)) return
       io.to(targetUserId).emit('chat:typing', { userId: socket.user.id, chatId })
     })
 
@@ -97,6 +112,11 @@ export function setupSocket(server) {
         }
 
         if (inCall.has(socket.user.id)) {
+          io.to(socket.user.id).emit('call:busy', { targetUserId })
+          return
+        }
+
+        if (socket.invisible.has(targetUserId)) {
           io.to(socket.user.id).emit('call:busy', { targetUserId })
           return
         }
@@ -179,7 +199,12 @@ export function setupSocket(server) {
       onlineUsers.delete(socket.user.id)
       supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', socket.user.id).then().catch(() => {})
       if (socket.showActivity) {
-        socket.broadcast.emit('user:offline', { userId: socket.user.id })
+        for (const other of io.sockets.sockets.values()) {
+          if (other.user.id === socket.user.id) continue
+          if (socket.invisible.has(other.user.id)) continue
+          if (other.invisible?.has(socket.user.id)) continue
+          other.emit('user:offline', { userId: socket.user.id })
+        }
       }
       inCall.delete(socket.user.id)
       const partnerId = callPairs.get(socket.user.id)
@@ -207,6 +232,34 @@ export function setupSocket(server) {
 
 export function getIO() {
   return io
+}
+
+export function notifyBlocked(blockerId, blockedId) {
+  if (!io) return
+  for (const s of io.sockets.sockets.values()) {
+    if (s.user.id === blockerId) s.invisible?.add(blockedId)
+    if (s.user.id === blockedId) s.invisible?.add(blockerId)
+  }
+}
+
+export function notifyUnblocked(blockerId, blockedId) {
+  if (!io) return
+  for (const s of io.sockets.sockets.values()) {
+    if (s.user.id === blockerId) s.invisible?.delete(blockedId)
+    if (s.user.id === blockedId) s.invisible?.delete(blockerId)
+  }
+}
+
+export function endCallBetween(userIdA, userIdB) {
+  if (!io) return
+  inCall.delete(userIdA)
+  inCall.delete(userIdB)
+  callPairs.delete(userIdA)
+  callPairs.delete(userIdB)
+  pendingCalls.delete(userIdA)
+  pendingCalls.delete(userIdB)
+  io.to(userIdA).emit('call:end', {})
+  io.to(userIdB).emit('call:end', {})
 }
 
 export function isUserOnline(userId) {

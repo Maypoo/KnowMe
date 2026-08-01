@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { sanitize, escapeILike, withDisplayName } from '../lib/utils.js'
 import { getUsernameChangeLimits, uploadAvatar } from '../lib/profile.js'
+import { getBlockStatus } from '../lib/blocks.js'
 import { getIO, isUserOnline } from '../src/socket.js'
 
 export const getByUsername = asyncHandler(async (req, res) => {
@@ -16,6 +17,13 @@ export const getByUsername = asyncHandler(async (req, res) => {
 
   if (!profile) {
     return res.status(404).json({ error: 'Usuario no encontrado' })
+  }
+
+  if (req.user.id !== profile.id) {
+    const { blockedByMe, blockedByThem } = await getBlockStatus(req.user.id, profile.id)
+    if (blockedByMe || blockedByThem) {
+      return res.json({ blocked: true, blockedByMe, username: profile.username })
+    }
   }
 
   profile.username = profile.display_name || profile.username

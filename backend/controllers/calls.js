@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js'
 import asyncHandler from '../middleware/asyncHandler.js'
+import { getBlockStatus } from '../lib/blocks.js'
 import { getIO, isInCall, addToCall, removeFromCall, setPendingCall, getPendingCall, removePendingCall } from '../src/socket.js'
 
 export const offer = asyncHandler(async (req, res) => {
@@ -10,6 +11,11 @@ export const offer = asyncHandler(async (req, res) => {
 
   if (isInCall(req.user.id)) {
     return res.status(409).json({ error: 'user_busy', message: 'Ya estás en una llamada' })
+  }
+
+  const blockStatus = await getBlockStatus(req.user.id, targetUserId)
+  if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+    return res.status(403).json({ error: 'No podés llamar a este usuario' })
   }
 
   const io = getIO()

@@ -284,3 +284,20 @@ create policy "User tag preferences gestionables solo por service_role"
   to service_role
   using (true)
   with check (true);
+
+create table blocks (
+  blocker_id uuid references auth.users on delete cascade not null,
+  blocked_id uuid references auth.users on delete cascade not null,
+  created_at timestamptz default now(),
+  primary key (blocker_id, blocked_id)
+);
+
+create index idx_blocks_blocked on blocks(blocked_id);
+
+alter table blocks enable row level security;
+
+create policy "Blocks gestionables solo por service_role"
+  on blocks for all
+  to service_role
+  using (true)
+  with check (true);

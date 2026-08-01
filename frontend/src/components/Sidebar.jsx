@@ -7,6 +7,7 @@ export default function Sidebar({
   pendingRequestsCount, notificationsCount, unreadTotal,
   incomingCall, incomingCallSeen,
   handleLogout, setPreferencesOpen, setTab,
+  setBlockedOpen,
   setSearchQuery, setSearchResults, setSearched,
   setActiveChat, setChatsView
 }) {
@@ -183,6 +184,12 @@ export default function Sidebar({
               className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
             >
               Preferencias
+            </button>
+            <button
+              onClick={() => { setBlockedOpen(true); setSidebarDropdownOpen(false) }}
+              className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
+            >
+              Bloqueados
             </button>
             <div className="border-t border-zinc-800 my-1" />
             <button

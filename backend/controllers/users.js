@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { sanitize, escapeILike } from '../lib/utils.js'
+import { getBlockRowsForUser } from '../lib/blocks.js'
 
 export const search = asyncHandler(async (req, res) => {
   const q = req.query.q
@@ -17,6 +18,11 @@ export const search = asyncHandler(async (req, res) => {
     .ilike('username', `%${escapeILike(sanitized.toLowerCase())}%`)
     .limit(10)
 
-  const mapped = (users || []).map(u => ({ ...u, username: u.display_name || u.username }))
+  const { blockedByMe, blockedByThem } = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockedByMe, ...blockedByThem])
+
+  const mapped = (users || [])
+    .filter(u => !excluded.has(u.id))
+    .map(u => ({ ...u, username: u.display_name || u.username }))
   res.json({ users: mapped })
 })

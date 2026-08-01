@@ -22,6 +22,7 @@ import ChatConversation from '../components/ChatConversation'
 import NewChat from '../components/NewChat'
 import VoiceCall from '../components/VoiceCall'
 import NotificationsPanel from '../components/NotificationsPanel'
+import BlockedList from '../components/BlockedList'
 
 const TABS = [
   { key: 'friends', label: 'Amigos' },
@@ -76,6 +77,7 @@ export default function Home() {
     } catch (err) { console.error(err); return [] }
   })
   const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [blockedOpen, setBlockedOpen] = useState(false)
   const [prefTagNames, setPrefTagNames] = useState([])
   const [prefSearch, setPrefSearch] = useState('')
   const [savingPrefs, setSavingPrefs] = useState(false)
@@ -183,6 +185,29 @@ export default function Home() {
       setIncomingCallSeen(false)
     }
 
+    const handleBlocked = (data) => {
+      queryClient.invalidateQueries({ queryKey: ['chats'] })
+      queryClient.invalidateQueries({ queryKey: ['chatsUnread'] })
+      queryClient.invalidateQueries({ queryKey: ['friends'] })
+      queryClient.invalidateQueries({ queryKey: ['friendRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['pendingRequests'] })
+      queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notificationsUnread'] })
+      queryClient.invalidateQueries({ queryKey: ['feed'] })
+      if (activeChatRef.current?.otherUser?.id === data.blockerId) {
+        setActiveChat(null)
+      }
+      if (incomingCall?.from?.id === data.blockerId) {
+        setIncomingCall(null)
+        setIncomingCallSeen(false)
+      }
+    }
+
+    const handleBlockedListUpdated = () => {
+      queryClient.invalidateQueries({ queryKey: ['blockedList'] })
+    }
+
     socket.on('friend_request_received', handleRequestReceived)
     socket.on('friend_request_updated', handleRequestUpdated)
     socket.on('friend_request_cancelled', handleRequestCancelled)
@@ -194,6 +219,8 @@ export default function Home() {
     socket.on('connect', handleReconnect)
     socket.on('signal:offer', handleIncomingCall)
     socket.on('call:end', handleCallEnd)
+    socket.on('user:blocked', handleBlocked)
+    socket.on('blocked:updated', handleBlockedListUpdated)
 
     return () => {
       socket.off('friend_request_received', handleRequestReceived)
@@ -207,6 +234,8 @@ export default function Home() {
       socket.off('connect', handleReconnect)
       socket.off('signal:offer', handleIncomingCall)
       socket.off('call:end', handleCallEnd)
+      socket.off('user:blocked', handleBlocked)
+      socket.off('blocked:updated', handleBlockedListUpdated)
     }
   }, [profile])
 
@@ -550,6 +579,7 @@ export default function Home() {
         incomingCallSeen={incomingCallSeen}
         handleLogout={handleLogout}
         setPreferencesOpen={setPreferencesOpen}
+        setBlockedOpen={setBlockedOpen}
         setTab={setTab}
         setSearchQuery={setSearchQuery}
         setSearchResults={setSearchResults}
@@ -608,6 +638,12 @@ export default function Home() {
                       className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
                     >
                       Perfil
+                    </button>
+                    <button
+                      onClick={() => { setBlockedOpen(true); setDropdownOpen(false) }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
+                    >
+                      Bloqueados
                     </button>
                     <button
                       onClick={handleLogout}
@@ -752,6 +788,10 @@ export default function Home() {
           setActiveChat={setActiveChat}
           setChatsView={setChatsView}
         />
+      )}
+
+      {blockedOpen && (
+        <BlockedList onClose={() => setBlockedOpen(false)} />
       )}
 
       <DeleteConfirmModal

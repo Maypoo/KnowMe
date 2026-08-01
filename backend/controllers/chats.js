@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { sanitize } from '../lib/utils.js'
+import { getBlockRowsForUser, getBlockStatus } from '../lib/blocks.js'
 import { getIO } from '../src/socket.js'
 
 export const list = asyncHandler(async (req, res) => {
@@ -86,7 +87,15 @@ export const list = asyncHandler(async (req, res) => {
     }
   }
 
-  const enriched = await Promise.all(chats.map(async (chat) => {
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+
+  const visibleChats = chats.filter(chat => {
+    const otherId = otherUserIdMap[chat.id]
+    return otherId && !excluded.has(otherId)
+  })
+
+  const enriched = await Promise.all(visibleChats.map(async (chat) => {
     const [lastMsgResult, unreadResult] = await Promise.all([
       supabase
         .from('chat_messages')
@@ -136,6 +145,11 @@ export const create = asyncHandler(async (req, res) => {
 
   if (otherUserId === req.user.id) {
     return res.status(400).json({ error: 'No podés chatear con vos mismo' })
+  }
+
+  const blockStatus = await getBlockStatus(req.user.id, otherUserId)
+  if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+    return res.status(403).json({ error: 'No podés chatear con este usuario' })
   }
 
   const { data: cp1 } = await supabase
@@ -266,8 +280,26 @@ export const unreadTotal = asyncHandler(async (req, res) => {
     }
   }
 
+  const { data: allParticipants } = await supabase
+    .from('chat_participants')
+    .select('chat_id, user_id')
+    .in('chat_id', chatIds)
+    .neq('user_id', req.user.id)
+
+  const otherByChat = {}
+  if (allParticipants) {
+    for (const p of allParticipants) {
+      otherByChat[p.chat_id] = p.user_id
+    }
+  }
+
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+
   let total = 0
   for (const p of participations) {
+    const otherId = otherByChat[p.chat_id]
+    if (otherId && excluded.has(otherId)) continue
     const { count } = await supabase
       .from('chat_messages')
       .select('*', { count: 'exact', head: true })
@@ -299,6 +331,13 @@ export const getMessages = asyncHandler(async (req, res) => {
   }
 
   const otherUserId = participants.find(p => p.user_id !== req.user.id)?.user_id
+
+  if (otherUserId) {
+    const blockStatus = await getBlockStatus(req.user.id, otherUserId)
+    if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+      return res.status(403).json({ error: 'No podés ver este chat' })
+    }
+  }
 
   let isFriend = false
   let pendingRequest = false
@@ -359,6 +398,10 @@ export const sendMessage = asyncHandler(async (req, res) => {
 
   const otherUserId = participants.find(p => p.user_id !== req.user.id)?.user_id
   if (otherUserId) {
+    const blockStatus = await getBlockStatus(req.user.id, otherUserId)
+    if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+      return res.status(403).json({ error: 'No podés enviar mensajes a este usuario' })
+    }
     const { data: friendship } = await supabase
       .from('friend_requests')
       .select('id')

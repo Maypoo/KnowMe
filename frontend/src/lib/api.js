@@ -35,7 +35,10 @@ export async function api(path, options = {}) {
     headers['Authorization'] = `Bearer ${authToken}`
   }
 
-  const MAX_RETRIES = 2
+  const method = (options.method || 'GET').toUpperCase()
+  const isIdempotent = ['GET', 'HEAD', 'OPTIONS'].includes(method)
+  const MAX_RETRIES = isIdempotent ? 2 : 1
+
   let lastError
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {

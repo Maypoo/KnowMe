@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js'
 import asyncHandler from '../middleware/asyncHandler.js'
 import { sanitize, escapeILike } from '../lib/utils.js'
+import { getBlockRowsForUser, getBlockStatus } from '../lib/blocks.js'
 import { getIO } from '../src/socket.js'
 
 const pendingFollowToggles = new Map()
@@ -21,6 +22,11 @@ export const follow = asyncHandler(async (req, res) => {
 
   if (target.id === req.user.id) {
     return res.status(400).json({ error: 'No podés seguirte a vos mismo' })
+  }
+
+  const blockStatus = await getBlockStatus(req.user.id, target.id)
+  if (blockStatus.blockedByMe || blockStatus.blockedByThem) {
+    return res.status(403).json({ error: 'No podés seguir a este usuario' })
   }
 
   const key = `follow:${req.user.id}:${target.id}`
@@ -250,6 +256,9 @@ export const getFollowers = asyncHandler(async (req, res) => {
     return res.json({ followers: [] })
   }
 
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+
   const followerIds = followerRows.map(f => f.follower_id)
 
   const { data: profiles, error: profileError } = await supabase
@@ -262,8 +271,9 @@ export const getFollowers = asyncHandler(async (req, res) => {
   }
 
   const idOrder = followerIds
-  profiles.sort((a, b) => idOrder.indexOf(a.id) - idOrder.indexOf(b.id))
+  const filteredProfiles = (profiles || []).filter(p => !excluded.has(p.id))
+  filteredProfiles.sort((a, b) => idOrder.indexOf(a.id) - idOrder.indexOf(b.id))
 
-  const mapped = (profiles || []).map(p => ({ ...p, username: p.display_name || p.username }))
+  const mapped = filteredProfiles.map(p => ({ ...p, username: p.display_name || p.username }))
   res.json({ followers: mapped })
 })
