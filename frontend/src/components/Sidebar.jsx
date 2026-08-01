@@ -24,7 +24,7 @@ export default function Sidebar({
   }, [])
 
   return (
-    <div className="hidden lg:flex lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:flex-col lg:bg-zinc-900 lg:w-64 lg:p-6 lg:z-40 lg:border-r lg:border-zinc-800">
+    <div className="hidden lg:flex lg:absolute lg:left-0 lg:top-0 lg:bottom-0 lg:w-64 lg:flex-col lg:bg-zinc-900 lg:p-6 lg:z-40 lg:border-r lg:border-zinc-800">
       <h1 className="text-2xl font-semibold mb-8 lg:mb-8">KnowMe</h1>
       <nav className="flex flex-col gap-1 flex-1">
         <button

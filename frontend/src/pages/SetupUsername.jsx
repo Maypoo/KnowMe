@@ -137,7 +137,7 @@ export default function SetupUsername() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+    <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <h1 className="text-2xl font-semibold text-zinc-100 mb-2 text-center">Elegí tu nombre de usuario</h1>
         <p className="text-zinc-500 text-sm text-center mb-8">{email}</p>

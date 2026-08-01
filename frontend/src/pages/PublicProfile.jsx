@@ -5,6 +5,7 @@ import { ArrowLeft, Heart, Send, User, X } from 'lucide-react'
 import NumberFlow from '@number-flow/react'
 import { api } from '../lib/api'
 import { useOnlineUsers } from '../lib/OnlineUsersContext'
+import { useTitleBar } from '../lib/TitleBarContext'
 import { timeAgo } from '../lib/timeAgo'
 import Avatar from '../components/Avatar'
 import { SkeletonBox, SkeletonAvatar } from '../components/Skeleton'
@@ -28,6 +29,7 @@ export default function PublicProfile() {
   const [showAvatar, setShowAvatar] = useState(false)
 
   const { isOnline } = useOnlineUsers()
+  const { setTitle } = useTitleBar()
 
   function postFromFeedCache(postId) {
     for (const key of ['all', 'friends']) {
@@ -67,25 +69,41 @@ export default function PublicProfile() {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     if (!username.startsWith('@')) {
       setError('Usuario no encontrado')
       setLoading(false)
       setCurrentUserLoading(false)
+      setTitle({ key: 'profile', label: null })
       return
     }
     setLoading(true)
     setError(null)
+    setTitle({ key: 'profile', label: null })
     api(`/api/profile/${encodeURIComponent(username)}`)
       .then(async (profileRes) => {
+        if (cancelled) return
         if (!profileRes.ok) {
           if (profileRes.status === 404) throw new Error('Usuario no encontrado')
           throw new Error('Error al cargar perfil')
         }
         const profileData = await profileRes.json()
         setProfile(profileData.profile)
+        const displayName = profileData.profile.display_name || profileData.profile.username
+        setTitle({ key: 'profile', label: `Perfil (${displayName})` })
       })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false))
+      .catch(err => {
+        if (cancelled) return
+        setError(err.message)
+        setTitle({ key: 'profile', label: null })
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+      setTitle({ key: 'default', label: null })
+    }
   }, [username])
 
   function updateFeedCache(postId, updater) {
@@ -189,7 +207,7 @@ export default function PublicProfile() {
 
   if (loading || currentUserLoading) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      <div className="min-h-full bg-zinc-950 text-zinc-100">
         <div className="max-w-lg mx-auto px-4 py-8">
           <SkeletonBox className="h-4 w-16 mb-8" />
           <div className="flex flex-col items-center gap-4">
@@ -216,7 +234,7 @@ export default function PublicProfile() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+      <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
         <div className="text-center">
           <h1 className="text-2xl font-semibold text-zinc-100 mb-2">{error}</h1>
           <button
@@ -233,7 +251,7 @@ export default function PublicProfile() {
   const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-full bg-zinc-950 text-zinc-100">
       <div className="max-w-lg mx-auto px-4 py-8">
         <button
           onClick={() => navigate('/')}

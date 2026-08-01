@@ -2,6 +2,8 @@ import { Routes, Route } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
 import { OnlineUsersProvider } from './lib/OnlineUsersContext'
+import { TitleBarProvider } from './lib/TitleBarContext'
+import TitleBar from './components/TitleBar'
 import Login from './pages/Login'
 import Home from './pages/Home'
 import AuthCallback from './pages/AuthCallback'
@@ -11,7 +13,7 @@ import PublicProfile from './pages/PublicProfile'
 
 function NotFound() {
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+    <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
       <div className="text-center">
         <h1 className="text-4xl font-semibold text-zinc-100 mb-2">404</h1>
         <p className="text-zinc-500 mb-6">No encontramos esta página</p>
@@ -30,15 +32,22 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <OnlineUsersProvider>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/setup-username" element={<SetupUsername />} />
-        <Route path="/profile/edit" element={<EditProfile />} />
-        <Route path="/:username" element={<PublicProfile />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+        <TitleBarProvider>
+          <div className="h-screen flex flex-col overscroll-none">
+            <TitleBar />
+            <main className="flex-1 min-h-0">
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/setup-username" element={<SetupUsername />} />
+                <Route path="/profile/edit" element={<EditProfile />} />
+                <Route path="/:username" element={<PublicProfile />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </main>
+          </div>
+        </TitleBarProvider>
       </OnlineUsersProvider>
     </QueryClientProvider>
   )

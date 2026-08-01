@@ -4,6 +4,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { Search, Settings, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
+import { useTitleBar } from '../lib/TitleBarContext'
 import Avatar from '../components/Avatar'
 import Sidebar from '../components/Sidebar'
 import MobileNav from '../components/MobileNav'
@@ -290,6 +291,23 @@ export default function Home() {
     localStorage.setItem(HOME_STATE_KEY, JSON.stringify({ view, tab, activeChat, chatsView }))
   }, [view, tab, activeChat, chatsView, profile])
 
+  const { setTitle } = useTitleBar()
+
+  useEffect(() => {
+    const keys = {
+      search: 'search',
+      home: 'home',
+      plus: 'plus',
+      notifications: 'notifications',
+      chats: chatsView === 'new' ? 'newchat' : activeChat ? 'chat' : 'chats',
+      friends: tab === 'add' ? 'add' : tab === 'requests' ? 'requests' : 'friends',
+    }
+    const label = view === 'chats' && chatsView !== 'new' && activeChat
+      ? activeChat.otherUser?.username ? `Chat (${activeChat.otherUser.username})` : 'Chat'
+      : null
+    setTitle({ key: keys[view] || 'default', label })
+  }, [view, tab, chatsView, activeChat, setTitle])
+
   useEffect(() => {
     if (!profile) return
     const stored = sessionStorage.getItem('chatReturn')
@@ -508,7 +526,7 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+      <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
         <p className="text-zinc-400">Cargando...</p>
       </div>
     )
@@ -519,7 +537,7 @@ export default function Home() {
   }
 
   return (
-    <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overscroll-none">
+    <div className="h-full relative bg-zinc-950 text-zinc-100 flex flex-col overscroll-none">
       <Sidebar
         profile={profile}
         view={view}

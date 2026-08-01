@@ -145,7 +145,7 @@ export default function AuthCallback() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+      <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
         <div className="w-full max-w-sm text-center">
           <p className="text-red-400 text-sm mb-4">{error}</p>
           <button
@@ -166,7 +166,7 @@ export default function AuthCallback() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+    <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
       <div className="text-center">
         <p className="text-zinc-400">
           {slow ? 'Aún estamos procesando tu inicio de sesión...' : 'Completando inicio de sesión...'}

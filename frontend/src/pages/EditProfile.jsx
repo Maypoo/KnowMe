@@ -478,7 +478,7 @@ export default function EditProfile() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+      <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
         <p className="text-zinc-400">Cargando...</p>
       </div>
     )
@@ -487,7 +487,7 @@ export default function EditProfile() {
   if (!profile) return null
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-full bg-zinc-950 text-zinc-100">
       <div className="max-w-lg mx-auto px-4 py-8">
         <button
           onClick={() => navigate(-1)}
