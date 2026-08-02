@@ -7,6 +7,7 @@ import { api } from '../lib/api'
 import Avatar from '../components/Avatar'
 import DatePicker from '../components/DatePicker'
 import CountrySelect from '../components/CountrySelect'
+import Logo from '../components/Logo'
 
 export default function EditProfile() {
   const queryClient = useQueryClient()
@@ -479,7 +480,7 @@ export default function EditProfile() {
   if (isLoading) {
     return (
       <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
-        <p className="text-zinc-400">Cargando...</p>
+        <Logo size={56} monochrome className="text-zinc-400 animate-spin-slow" />
       </div>
     )
   }

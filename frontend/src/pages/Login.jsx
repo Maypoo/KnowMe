@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { clearAuthToken } from '../lib/api'
 import ColorBends from '../components/ColorBends'
 import DotField from '../components/DotField'
+import Logo from '../components/Logo'
 
 
 export default function Login() {
@@ -72,6 +73,9 @@ export default function Login() {
 
       <div className="relative z-10 w-full max-w-sm">
         <div className="text-center mb-8">
+          <div className="flex flex-col items-center mb-4">
+            <Logo size={72} />
+          </div>
           <h1 className="text-5xl font-bold text-zinc-100 tracking-tight mb-4">KnowMe</h1>
           <p className="text-zinc-400 text-sm">
             Conectate con tus amigos, conocé gente nueva y conversá en tiempo real, el tiempo que quieras.

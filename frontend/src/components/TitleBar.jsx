@@ -9,6 +9,7 @@ import {
   LogIn, SquarePen, Loader, User,
 } from 'lucide-react'
 import { useTitleBar } from '../lib/TitleBarContext'
+import Logo from './Logo'
 
 const TITLES = {
   default: { icon: null, label: 'KnowMe' },
@@ -73,7 +74,8 @@ export default function TitleBar() {
       data-tauri-drag-region
       className="relative h-9 shrink-0 flex items-center bg-zinc-950 select-none"
     >
-      <div data-tauri-drag-region className="absolute left-0 flex h-full items-center pl-4 pr-2">
+      <div data-tauri-drag-region className="absolute left-0 flex h-full items-center pl-3 pr-2 gap-1.5">
+        <Logo size={14} />
         <span className="text-xs font-semibold text-zinc-500 tracking-wide">KnowMe</span>
       </div>
       <div

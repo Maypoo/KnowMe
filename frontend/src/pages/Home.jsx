@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import { useTitleBar } from '../lib/TitleBarContext'
 import Avatar from '../components/Avatar'
+import Logo from '../components/Logo'
 import Sidebar from '../components/Sidebar'
 import MobileNav from '../components/MobileNav'
 import SearchView from '../components/SearchView'
@@ -566,8 +567,8 @@ export default function Home() {
   if (loading) {
     return (
       <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
-        <div className="text-center">
-          <p className="text-zinc-400">Cargando...</p>
+        <div className="flex flex-col items-center">
+          <Logo size={56} monochrome className="mb-4 text-zinc-400 animate-spin-slow" />
           {showStartupHint && (
             <p className="text-zinc-500 text-sm mt-3 max-w-xs mx-auto">
               La primera vez que se usa la app el servidor tarda unos segundos en
@@ -630,7 +631,10 @@ export default function Home() {
       ) : (
         <div className="lg:ml-64 px-6 py-6 flex-1 flex flex-col min-h-0">
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-2xl font-semibold lg:hidden">KnowMe</h1>
+            <div className="flex items-center gap-2 lg:hidden">
+              <Logo size={28} />
+              <h1 className="text-2xl font-semibold">KnowMe</h1>
+            </div>
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setPreferencesOpen(true)}
