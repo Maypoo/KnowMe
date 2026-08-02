@@ -38,6 +38,14 @@ export default function PublicProfile() {
   const { isOnline } = useOnlineUsers()
   const { setTitle } = useTitleBar()
 
+  const goBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1)
+    } else {
+      navigate('/')
+    }
+  }
+
   function postFromFeedCache(postId) {
     for (const key of ['all', 'friends']) {
       const feedData = queryClient.getQueryData(['feed', key])
@@ -340,7 +348,7 @@ export default function PublicProfile() {
         <div className="text-center">
           <h1 className="text-2xl font-semibold text-zinc-100 mb-2">{error}</h1>
           <button
-            onClick={() => navigate('/')}
+            onClick={goBack}
             className="text-zinc-500 hover:text-zinc-300 text-sm transition"
           >
             <ArrowLeft size={14} className="inline -mt-0.5" /> Volver al inicio
@@ -355,7 +363,7 @@ export default function PublicProfile() {
       <div className="min-h-full bg-zinc-950 text-zinc-100">
         <div className="max-w-lg mx-auto px-4 py-8 flex flex-col items-center">
           <button
-            onClick={() => navigate('/')}
+            onClick={goBack}
             className="text-zinc-500 hover:text-zinc-300 text-sm transition mb-12 self-start"
           >
             <ArrowLeft size={14} className="inline -mt-0.5" /> Volver
@@ -382,7 +390,7 @@ export default function PublicProfile() {
               </button>
             ) : (
               <button
-                onClick={() => navigate('/')}
+                onClick={goBack}
                 className="mt-4 text-zinc-500 hover:text-zinc-300 text-sm transition"
               >
                 Volver al inicio
@@ -401,7 +409,7 @@ export default function PublicProfile() {
       <div className="max-w-lg mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <button
-            onClick={() => navigate('/')}
+            onClick={goBack}
             className="text-zinc-500 hover:text-zinc-300 text-sm transition"
           >
             <ArrowLeft size={14} className="inline -mt-0.5" /> Volver

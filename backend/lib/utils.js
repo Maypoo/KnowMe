@@ -13,7 +13,7 @@ export function withDisplayName(profile) {
 
 export function isLocalOrigin(origin) {
   if (!origin) return false
-  if (origin === 'tauri://localhost' || origin === 'https://tauri.localhost') return true
+  if (origin === 'tauri://localhost' || origin === 'http://tauri.localhost' || origin === 'https://tauri.localhost') return true
   try {
     const hostname = new URL(origin).hostname
     return hostname === 'localhost' || hostname === '127.0.0.1' ||

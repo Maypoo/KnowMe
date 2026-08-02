@@ -14,7 +14,7 @@ export function setupSocket(server) {
       origin: (origin, callback) => {
         const allowed = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map(s => s.trim())
         if (!origin || allowed.includes(origin)) return callback(null, true)
-        if (origin === 'tauri://localhost' || origin === 'https://tauri.localhost') return callback(null, true)
+        if (origin === 'tauri://localhost' || origin === 'http://tauri.localhost' || origin === 'https://tauri.localhost') return callback(null, true)
         try {
           const hostname = new URL(origin).hostname
           const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' ||

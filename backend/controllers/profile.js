@@ -301,12 +301,13 @@ export const checkUsername = asyncHandler(async (req, res) => {
     .select('username')
     .ilike('username', escapeILike(lower))
 
-  let token = req.cookies['sb-access-token']
+  let token
+  const authHeader = req.headers['authorization']
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.slice(7)
+  }
   if (!token) {
-    const authHeader = req.headers['authorization']
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.slice(7)
-    }
+    token = req.cookies['sb-access-token']
   }
 
   if (token) {

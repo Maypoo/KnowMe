@@ -15,6 +15,25 @@ export default function AuthCallback() {
     let cancelled = false
     let slowTimer
 
+    const postWithRetry = async (path, body) => {
+      let lastError
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          return await api(path, {
+            method: 'POST',
+            body: JSON.stringify(body),
+          })
+        } catch (err) {
+          lastError = err
+          if (cancelled) throw err
+          if (attempt < 2) {
+            await new Promise(r => setTimeout(r, 700 * (attempt + 1)))
+          }
+        }
+      }
+      throw lastError
+    }
+
     const handleCallback = async () => {
       setSlow(false)
 
@@ -27,7 +46,7 @@ export default function AuthCallback() {
 
       if (accessToken && refreshToken) {
         try {
-          setAuthToken(accessToken)
+          setAuthToken(accessToken, refreshToken)
 
           if (isDelete) {
             const res = await api('/api/auth/delete-account', {
@@ -50,12 +69,9 @@ export default function AuthCallback() {
             return
           }
 
-          const res = await api('/api/auth/google', {
-            method: 'POST',
-            body: JSON.stringify({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            }),
+          const res = await postWithRetry('/api/auth/google', {
+            access_token: accessToken,
+            refresh_token: refreshToken,
           })
 
           if (cancelled) return
@@ -68,7 +84,7 @@ export default function AuthCallback() {
           }
 
           if (data.needsUsername) {
-            navigate('/setup-username', { state: { email: data.user.email, accessToken } })
+            navigate('/setup-username', { state: { email: data.user.email, accessToken, refreshToken } })
           } else {
             navigate('/')
           }
@@ -97,14 +113,11 @@ export default function AuthCallback() {
       }
 
       try {
-        setAuthToken(session.access_token)
+        setAuthToken(session.access_token, session.refresh_token)
 
-        const res = await api('/api/auth/google', {
-          method: 'POST',
-          body: JSON.stringify({
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-          }),
+        const res = await postWithRetry('/api/auth/google', {
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
         })
 
         if (cancelled) return
@@ -117,7 +130,7 @@ export default function AuthCallback() {
         }
 
         if (data.needsUsername) {
-          navigate('/setup-username', { state: { email: data.user.email, accessToken: session.access_token } })
+          navigate('/setup-username', { state: { email: data.user.email, accessToken: session.access_token, refreshToken: session.refresh_token } })
         } else {
           navigate('/')
         }

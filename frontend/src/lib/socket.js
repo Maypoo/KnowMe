@@ -14,6 +14,6 @@ export const socket = io(resolveUrl(), {
   autoConnect: false,
   withCredentials: true,
   auth: (cb) => {
-    cb({ token: sessionStorage.getItem('knowme_auth_token') })
+    cb({ token: localStorage.getItem('knowme_auth_token') })
   },
 })

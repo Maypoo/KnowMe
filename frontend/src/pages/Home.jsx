@@ -34,7 +34,7 @@ const HOME_STATE_KEY = 'knowme_home_state'
 
 function loadSavedState() {
   try {
-    const raw = localStorage.getItem(HOME_STATE_KEY)
+    const raw = sessionStorage.getItem(HOME_STATE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (parsed.view && !['friends', 'chats', 'search', 'home', 'notifications', 'plus'].includes(parsed.view)) return null
@@ -53,6 +53,7 @@ export default function Home() {
   const saved = useRef(loadSavedState())
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showStartupHint, setShowStartupHint] = useState(false)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState(saved.current?.tab ?? 'friends')
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -98,6 +99,15 @@ export default function Home() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (!loading) {
+      setShowStartupHint(false)
+      return
+    }
+    const t = setTimeout(() => setShowStartupHint(true), 4000)
+    return () => clearTimeout(t)
+  }, [loading])
 
   useEffect(() => {
     api('/api/auth/me')
@@ -315,11 +325,6 @@ export default function Home() {
     }
   }, [preferencesOpen, prefTagIds, allTags])
 
-  useEffect(() => {
-    if (!profile) return
-    localStorage.setItem(HOME_STATE_KEY, JSON.stringify({ view, tab, activeChat, chatsView }))
-  }, [view, tab, activeChat, chatsView, profile])
-
   const { setTitle } = useTitleBar()
 
   useEffect(() => {
@@ -352,11 +357,16 @@ export default function Home() {
     }
   }, [profile])
 
+  useEffect(() => {
+    if (!profile) return
+    sessionStorage.setItem(HOME_STATE_KEY, JSON.stringify({ view, tab, activeChat, chatsView }))
+  }, [view, tab, activeChat, chatsView, profile])
+
   const handleLogout = async () => {
     if (socket.connected) {
       socket.disconnect()
     }
-    localStorage.removeItem(HOME_STATE_KEY)
+    sessionStorage.removeItem(HOME_STATE_KEY)
     await api('/api/auth/logout', { method: 'POST' })
     navigate('/login')
   }
@@ -556,7 +566,15 @@ export default function Home() {
   if (loading) {
     return (
       <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
-        <p className="text-zinc-400">Cargando...</p>
+        <div className="text-center">
+          <p className="text-zinc-400">Cargando...</p>
+          {showStartupHint && (
+            <p className="text-zinc-500 text-sm mt-3 max-w-xs mx-auto">
+              La primera vez que se usa la app el servidor tarda unos segundos en
+              despertar, casi está listo.
+            </p>
+          )}
+        </div>
       </div>
     )
   }

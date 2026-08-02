@@ -1,5 +1,8 @@
+import { supabase } from './supabase'
+
 const BASE_URL = import.meta.env.VITE_API_URL || ''
 const AUTH_TOKEN_KEY = 'knowme_auth_token'
+const REFRESH_TOKEN_KEY = 'knowme_refresh_token'
 
 function resolveUrl(path) {
   if (!BASE_URL) return path
@@ -10,19 +13,49 @@ function resolveUrl(path) {
   return `${url.toString().replace(/\/$/, '')}${path}`
 }
 
-let authToken = sessionStorage.getItem(AUTH_TOKEN_KEY)
+let authToken = localStorage.getItem(AUTH_TOKEN_KEY)
+let refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
 
-export function setAuthToken(token) {
+export function setAuthToken(token, refresh = refreshToken) {
   authToken = token
+  refreshToken = refresh
   if (token) {
-    sessionStorage.setItem(AUTH_TOKEN_KEY, token)
+    localStorage.setItem(AUTH_TOKEN_KEY, token)
   } else {
-    sessionStorage.removeItem(AUTH_TOKEN_KEY)
+    localStorage.removeItem(AUTH_TOKEN_KEY)
+  }
+  if (refresh) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
+  } else {
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
   }
 }
 
 export function clearAuthToken() {
-  setAuthToken(null)
+  setAuthToken(null, null)
+}
+
+let refreshing = null
+
+async function refreshAuthToken() {
+  if (!refreshToken) return null
+  if (refreshing) return refreshing
+  refreshing = (async () => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken })
+      if (error || !data.session) {
+        clearAuthToken()
+        return null
+      }
+      setAuthToken(data.session.access_token, data.session.refresh_token)
+      return data.session.access_token
+    } catch {
+      return null
+    } finally {
+      refreshing = null
+    }
+  })()
+  return refreshing
 }
 
 export async function api(path, options = {}) {
@@ -43,11 +76,24 @@ export async function api(path, options = {}) {
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const res = await fetch(resolveUrl(path), {
+      let res = await fetch(resolveUrl(path), {
         credentials: 'include',
         ...options,
         headers,
       })
+
+      if (res.status === 401 && authToken && attempt < 1) {
+        const newToken = await refreshAuthToken()
+        if (newToken) {
+          headers['Authorization'] = `Bearer ${newToken}`
+          res = await fetch(resolveUrl(path), {
+            credentials: 'include',
+            ...options,
+            headers,
+          })
+        }
+      }
+
       const origJson = res.json.bind(res)
       res.json = async () => {
         try {

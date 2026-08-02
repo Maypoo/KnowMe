@@ -8,6 +8,7 @@ export default function SetupUsername() {
   const location = useLocation()
   const email = location.state?.email || ''
   const accessToken = location.state?.accessToken
+  const refreshToken = location.state?.refreshToken
   const [username, setUsername] = useState('')
   const [avatarPreview, setAvatarPreview] = useState(null)
   const [avatarFile, setAvatarFile] = useState(null)
@@ -127,7 +128,7 @@ export default function SetupUsername() {
         return
       }
 
-      setAuthToken(accessToken)
+      setAuthToken(accessToken, refreshToken)
       navigate('/')
     } catch (err) {
       console.error(err)
