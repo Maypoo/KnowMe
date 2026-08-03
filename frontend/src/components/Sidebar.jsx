@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, User, Home as HomeIcon, Users, Send, Bell, Plus, Phone } from 'lucide-react'
 import Avatar from './Avatar'
+import Logo from './Logo'
 
 export default function Sidebar({
   profile, view, setView, navigate,
@@ -26,7 +27,10 @@ export default function Sidebar({
 
   return (
     <div className="hidden lg:flex lg:absolute lg:left-0 lg:top-0 lg:bottom-0 lg:w-64 lg:flex-col lg:bg-zinc-900 lg:p-6 lg:z-40 lg:border-r lg:border-zinc-800">
-      <h1 className="text-2xl font-semibold mb-8 lg:mb-8">KnowMe</h1>
+      <div className="flex items-center gap-3 px-3 mb-8">
+        <Logo size={30} />
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">KnowMe</h1>
+      </div>
       <nav className="flex flex-col gap-1 flex-1">
         <button
           onClick={() => setView('home')}

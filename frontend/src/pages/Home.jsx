@@ -638,19 +638,19 @@ export default function Home() {
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setPreferencesOpen(true)}
-                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition lg:hidden"
+                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition lg:hidden max-[420px]:hidden"
               >
                 <Settings size={20} />
               </button>
               <button
                 onClick={() => { setView('search'); setSearchQuery(''); setSearchResults([]); setSearched(false) }}
-                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition lg:hidden"
+                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition lg:hidden max-[360px]:hidden"
               >
                 <Search size={20} />
               </button>
               <div className="relative lg:hidden" ref={dropdownRef}>
                 <button onClick={() => setDropdownOpen(!dropdownOpen)} className="flex items-center gap-3 outline-none">
-                  <span className="text-zinc-500 text-sm">{profile.username}</span>
+                  <span className="text-zinc-500 text-sm max-[300px]:hidden">{profile.username}</span>
                   <Avatar src={profile.avatar_url} size={40} />
                 </button>
                 {dropdownOpen && (
@@ -660,6 +660,18 @@ export default function Home() {
                       className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
                     >
                       Perfil
+                    </button>
+                    <button
+                      onClick={() => { setPreferencesOpen(true); setDropdownOpen(false) }}
+                      className="hidden w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition max-[420px]:block"
+                    >
+                      Preferencias
+                    </button>
+                    <button
+                      onClick={() => { setView('search'); setSearchQuery(''); setSearchResults([]); setSearched(false); setDropdownOpen(false) }}
+                      className="hidden w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition max-[360px]:block"
+                    >
+                      Buscar
                     </button>
                     <button
                       onClick={() => { setBlockedOpen(true); setDropdownOpen(false) }}
