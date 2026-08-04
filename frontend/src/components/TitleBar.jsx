@@ -87,7 +87,7 @@ export default function TitleBar() {
           <span className="text-xs font-medium text-zinc-300 truncate">{label}</span>
         </span>
       </div>
-      <div className="absolute right-0 flex h-full">
+      <div className="absolute right-0 flex h-full" data-tauri-drag-region="false">
         <button
           onClick={() => appWindow.minimize()}
           aria-label="Minimizar"

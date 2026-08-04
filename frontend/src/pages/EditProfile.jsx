@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Camera, RotateCw, FlipHorizontal2, Eraser } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { api } from '../lib/api'
+import { startOAuth, onOAuthTokens } from '../lib/oauth'
 import Avatar from '../components/Avatar'
 import DatePicker from '../components/DatePicker'
 import CountrySelect from '../components/CountrySelect'
@@ -81,6 +81,27 @@ export default function EditProfile() {
       navigate('/login')
     }
   }, [profile, isLoading, navigate])
+
+  useEffect(() => {
+    return onOAuthTokens(async (tokens) => {
+      if (!tokens?.deleteAccount || !tokens?.access_token || !tokens?.refresh_token) return
+      try {
+        const res = await api('/api/auth/delete-account', {
+          method: 'POST',
+          body: JSON.stringify({
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        navigate('/login', { state: { deleted: true } })
+      } catch (err) {
+        console.error(err)
+        setError(err.message || 'Error al eliminar la cuenta')
+      }
+    })
+  }, [])
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0]
@@ -451,14 +472,10 @@ export default function EditProfile() {
   }
 
   const handleDeleteAccount = async () => {
-    const { error: signInError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin + '/auth/callback?action=delete',
-      },
-    })
-
-    if (signInError) {
+    try {
+      await startOAuth({ deleteAccount: true })
+    } catch (err) {
+      console.error(err)
       setError('Error al iniciar reautenticación con Google')
     }
   }

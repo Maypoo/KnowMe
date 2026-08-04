@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import { clearAuthToken } from '../lib/api'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { api, setAuthToken, clearAuthToken } from '../lib/api'
+import { startOAuth, onOAuthTokens } from '../lib/oauth'
 import ColorBends from '../components/ColorBends'
 import DotField from '../components/DotField'
 
 
 export default function Login() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [error, setError] = useState(null)
   const [googleLoading, setGoogleLoading] = useState(false)
   const deleted = location.state?.deleted
@@ -16,18 +17,45 @@ export default function Login() {
     clearAuthToken()
   }, [])
 
+  const completeLogin = async (accessToken, refreshToken) => {
+    setError(null)
+    try {
+      setAuthToken(accessToken, refreshToken)
+      const res = await api('/api/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al iniciar sesión')
+      if (data.needsUsername) {
+        navigate('/setup-username', { state: { email: data.user.email, accessToken, refreshToken } })
+      } else {
+        navigate('/')
+      }
+    } catch (err) {
+      console.error(err)
+      setError('Error de conexión. Intenta de nuevo.')
+    }
+    setGoogleLoading(false)
+  }
+
+  useEffect(() => {
+    return onOAuthTokens(async (tokens) => {
+      if (!tokens?.access_token || !tokens?.refresh_token) {
+        setGoogleLoading(false)
+        return
+      }
+      await completeLogin(tokens.access_token, tokens.refresh_token)
+    })
+  }, [])
+
   const handleGoogle = async () => {
     setGoogleLoading(true)
     setError(null)
-
-    const { error: signInError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin + '/auth/callback',
-      },
-    })
-
-    if (signInError) {
+    try {
+      await startOAuth()
+    } catch (err) {
+      console.error(err)
       setError('Error al iniciar sesión con Google')
       setGoogleLoading(false)
     }
