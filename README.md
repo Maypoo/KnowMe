@@ -1,4 +1,4 @@
-<h1 align="center">KnowMe v0.1.0 (Pre-release)</h1>
+<h1 align="center">KnowMe v0.1.1 (Pre-release)</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
@@ -19,10 +19,10 @@ Esta es la primera versión de escritorio de KnowMe. Es un pre-release, no es un
 Última versión: https://github.com/Maypoo/KnowMe/releases
 
 
-<img width="1282" height="752" src="https://github.com/user-attachments/assets/b8f65127-d302-42a4-b43c-03eed857f71a" />
+<img width="1280" height="720" src="https://github.com/user-attachments/assets/a03a100e-eeb7-4214-8b14-5871c4ed3350" />
 <br>
 <br>
-<img width="1282" height="752" src="https://github.com/user-attachments/assets/3bdd99d0-fb50-497d-815f-93734bb46e3b" />
+<img width="1280" height="720" src="https://github.com/user-attachments/assets/7f2d2244-6c2b-4955-b7c6-c4869b01bc90" />
 <br>
 <br>
-<img width="1282" height="752" src="https://github.com/user-attachments/assets/c73bbd58-271b-48c5-93fd-f052f2f1ecd1" />
+<img width="1280" height="720" src="https://github.com/user-attachments/assets/683a3bb0-7775-444c-978f-574563f27a35" />
