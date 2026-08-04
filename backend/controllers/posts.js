@@ -13,7 +13,8 @@ export const create = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'El contenido es requerido' })
   }
 
-  const sanitized = sanitize(content.trim()).slice(0, 300)
+  const normalized = content.trim().replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n')
+  const sanitized = sanitize(normalized).slice(0, 300)
 
   const { data: existing } = await supabase
     .from('posts')

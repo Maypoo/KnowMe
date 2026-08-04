@@ -17,7 +17,10 @@ export default function CreatePostView({
       <div className="w-full max-w-md flex flex-col items-center gap-4 h-60">
         <textarea
           value={postContent}
-          onChange={(e) => setPostContent(e.target.value.slice(0, 300))}
+          onChange={(e) => {
+            const value = e.target.value.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n')
+            setPostContent(value.slice(0, 300))
+          }}
           placeholder="Escribí tus intereses actuales."
           className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-zinc-100 placeholder-zinc-500 resize-none focus:outline-none transition h-32"
           style={myPost && !editing ? { borderColor: '#52525b', opacity: 0.5 } : undefined}
