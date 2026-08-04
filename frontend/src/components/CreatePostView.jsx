@@ -18,7 +18,10 @@ export default function CreatePostView({
         <textarea
           value={postContent}
           onChange={(e) => {
-            const value = e.target.value.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n')
+            let value = e.target.value.replace(/\r\n?/g, '\n')
+            const lines = value.split('\n')
+            if (lines.length > 10) value = lines.slice(0, 10).join('\n')
+            value = value.replace(/\n{3,}/g, '\n\n')
             setPostContent(value.slice(0, 300))
           }}
           placeholder="Escribí tus intereses actuales."

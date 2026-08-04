@@ -14,7 +14,9 @@ export const create = asyncHandler(async (req, res) => {
   }
 
   const normalized = content.trim().replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n')
-  const sanitized = sanitize(normalized).slice(0, 300)
+  const lines = normalized.split('\n')
+  const limited = lines.length > 10 ? lines.slice(0, 10).join('\n') : normalized
+  const sanitized = sanitize(limited).slice(0, 300)
 
   const { data: existing } = await supabase
     .from('posts')
