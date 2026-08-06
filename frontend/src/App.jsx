@@ -1,4 +1,5 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Link } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
 import { OnlineUsersProvider } from './lib/OnlineUsersContext'
@@ -17,12 +18,13 @@ function NotFound() {
       <div className="text-center">
         <h1 className="text-4xl font-semibold text-zinc-100 mb-2">404</h1>
         <p className="text-zinc-500 mb-6">No encontramos esta página</p>
-        <a
-          href="/"
-          className="inline-block bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-4 py-2 text-sm transition"
+        <Link
+          to="/"
+          className="inline-block rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+          title="Volver al inicio"
         >
-          Volver al inicio
-        </a>
+          <ArrowLeft size={20} />
+        </Link>
       </div>
     </div>
   )

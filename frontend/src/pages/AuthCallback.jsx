@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { api, setAuthToken } from '../lib/api'
+import { ArrowLeft } from 'lucide-react'
 
 const SLOW_MS = 20000
 
@@ -169,9 +170,10 @@ export default function AuthCallback() {
           </button>
           <button
             onClick={() => navigate('/login')}
-            className="text-zinc-500 hover:text-zinc-300 underline bg-transparent border-none cursor-pointer"
+            className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+            title="Volver a iniciar sesión"
           >
-            Volver a iniciar sesión
+            <ArrowLeft size={20} />
           </button>
         </div>
       </div>
@@ -187,9 +189,10 @@ export default function AuthCallback() {
         {slow && (
           <button
             onClick={() => navigate('/login')}
-            className="mt-4 text-zinc-500 hover:text-zinc-300 underline bg-transparent border-none cursor-pointer text-sm"
+            className="mt-4 rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+            title="Volver a iniciar sesión"
           >
-            Volver a iniciar sesión
+            <ArrowLeft size={20} />
           </button>
         )}
       </div>

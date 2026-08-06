@@ -77,10 +77,15 @@ export const update = asyncHandler(async (req, res) => {
   let oldUsername
 
   if (bio !== undefined) {
-    if (typeof bio !== 'string' || bio.length > 100) {
+    if (typeof bio !== 'string') {
       return res.status(400).json({ error: 'La biografía no puede superar los 100 caracteres' })
     }
-    updates.bio = bio
+    const normalized = bio.trim().replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n')
+    const lines = normalized.split('\n')
+    updates.bio = lines.length > 5 ? lines.slice(0, 5).join('\n') : normalized
+    if (updates.bio.length > 100) {
+      return res.status(400).json({ error: 'La biografía no puede superar los 100 caracteres' })
+    }
   }
 
   if (birth_date !== undefined) {

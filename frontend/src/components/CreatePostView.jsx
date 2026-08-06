@@ -15,6 +15,7 @@ export default function CreatePostView({
   return (
     <div className="flex-1 flex items-center justify-center px-6">
       <div className="w-full max-w-md flex flex-col items-center gap-4 h-60">
+        <h2 className="text-center text-zinc-300 text-lg font-semibold mb-3">Publicación actual</h2>
         <textarea
           value={postContent}
           onChange={(e) => {

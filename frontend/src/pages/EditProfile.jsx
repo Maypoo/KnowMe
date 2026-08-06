@@ -509,9 +509,10 @@ export default function EditProfile() {
       <div className="max-w-lg mx-auto px-4 py-8">
         <button
           onClick={() => navigate(-1)}
-          className="text-zinc-500 hover:text-zinc-300 text-sm transition mb-8"
+          className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition mb-8"
+          title="Volver"
         >
-          <ArrowLeft size={14} className="inline -mt-0.5" /> Volver
+          <ArrowLeft size={20} />
         </button>
 
         <h1 className="text-xl font-semibold mb-8 text-center">Editar perfil</h1>
@@ -599,7 +600,13 @@ export default function EditProfile() {
             <label className="text-sm text-zinc-500">Biografía</label>
             <textarea
               value={bio}
-              onChange={e => setBio(e.target.value.slice(0, 100))}
+              onChange={e => {
+                let value = e.target.value.replace(/\r\n?/g, '\n')
+                const lines = value.split('\n')
+                if (lines.length > 5) value = lines.slice(0, 5).join('\n')
+                value = value.replace(/\n{3,}/g, '\n\n')
+                setBio(value.slice(0, 100))
+              }}
               maxLength={100}
               rows={3}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 resize-none outline-none focus:border-zinc-600 transition"

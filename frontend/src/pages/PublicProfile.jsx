@@ -37,6 +37,16 @@ export default function PublicProfile() {
 
   const { isOnline } = useOnlineUsers()
   const { setTitle } = useTitleBar()
+  const isOwnProfile = !!currentUser && currentUser.username?.toLowerCase() === username.toLowerCase()
+  const editProfileButton = (
+    <button
+      onClick={() => navigate('/profile/edit')}
+      className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
+      style={{ backgroundColor: 'var(--color-accent)' }}
+    >
+      Editar perfil
+    </button>
+  )
 
   const goBack = () => {
     if (window.history.length > 1) {
@@ -318,8 +328,8 @@ export default function PublicProfile() {
   if (loading || currentUserLoading) {
     return (
       <div className="min-h-full bg-zinc-950 text-zinc-100">
-        <div className="max-w-lg mx-auto px-4 py-8 lg:max-w-4xl">
-          <SkeletonBox className="h-4 w-16 mb-8" />
+        <div className="max-w-lg mx-auto px-4 py-8 lg:max-w-4xl lg:py-12">
+          <div className="h-9 mb-8" />
           <div className="flex flex-col items-center gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:gap-12">
             <SkeletonAvatar size={96} className="lg:hidden" />
             <SkeletonAvatar size={144} className="hidden lg:block lg:shrink-0 lg:self-start" />
@@ -361,9 +371,10 @@ export default function PublicProfile() {
           <h1 className="text-2xl font-semibold text-zinc-100 mb-2">{error}</h1>
           <button
             onClick={goBack}
-            className="text-zinc-500 hover:text-zinc-300 text-sm transition"
+            className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+            title="Volver al inicio"
           >
-            <ArrowLeft size={14} className="inline -mt-0.5" /> Volver al inicio
+            <ArrowLeft size={20} />
           </button>
         </div>
       </div>
@@ -376,9 +387,10 @@ export default function PublicProfile() {
         <div className="max-w-lg mx-auto px-4 py-8 flex flex-col items-center">
           <button
             onClick={goBack}
-            className="text-zinc-500 hover:text-zinc-300 text-sm transition mb-12 self-start"
+            className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition mb-12 self-start"
+            title="Volver"
           >
-            <ArrowLeft size={14} className="inline -mt-0.5" /> Volver
+            <ArrowLeft size={20} />
           </button>
           <div className="flex flex-col items-center gap-4 mt-6">
             <div className="rounded-full p-5 bg-zinc-900">
@@ -392,20 +404,13 @@ export default function PublicProfile() {
                 ? 'No vas a ver su información ni él la tuya. Podés desbloquearlo cuando quieras.'
                 : 'No vas a poder ver su información ni él la tuya.'}
             </p>
-            {blocked.blockedByMe ? (
+            {blocked.blockedByMe && (
               <button
                 onClick={handleUnblock}
                 disabled={blocking}
                 className="mt-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
               >
                 {blocking ? 'Desbloqueando...' : 'Desbloquear'}
-              </button>
-            ) : (
-              <button
-                onClick={goBack}
-                className="mt-4 text-zinc-500 hover:text-zinc-300 text-sm transition"
-              >
-                Volver al inicio
               </button>
             )}
           </div>
@@ -422,11 +427,12 @@ export default function PublicProfile() {
         <div className="flex items-center justify-between mb-8">
           <button
             onClick={goBack}
-            className="text-zinc-500 hover:text-zinc-300 text-sm transition"
+            className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
+            title="Volver"
           >
-            <ArrowLeft size={14} className="inline -mt-0.5" /> Volver
+            <ArrowLeft size={20} />
           </button>
-          {currentUser?.username?.toLowerCase() !== username.toLowerCase() && (
+          {!isOwnProfile && (
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen(prev => !prev)}
@@ -555,87 +561,87 @@ export default function PublicProfile() {
                 Enviar mensaje
               </button>
             )}
+            {isOwnProfile && editProfileButton}
           </div>
 
-          <div className="flex flex-col items-center gap-4 lg:flex-row lg:items-center lg:justify-center lg:basis-full lg:gap-3">
-          {currentUser?.username?.toLowerCase() === username.toLowerCase() ? (
-            <button
-              onClick={() => navigate('/profile/edit')}
-              className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
-              style={{ backgroundColor: 'var(--color-accent)' }}
-            >
-              Editar perfil
-            </button>
-          ) : (
-            <>
-              <div className="flex gap-3">
-                {profile.is_following ? (
+          <div
+            className={[
+              'flex flex-col items-center gap-4 lg:flex-row lg:items-center lg:justify-center lg:basis-full lg:gap-3',
+              isOwnProfile && 'lg:hidden',
+            ].filter(Boolean).join(' ')}
+          >
+            {isOwnProfile ? (
+              editProfileButton
+            ) : (
+              <>
+                <div className="flex gap-3">
+                  {profile.is_following ? (
+                    <button
+                      onClick={handleUnfollow}
+                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition"
+                    >
+                      Dejar de seguir
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleFollow}
+                      className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                      style={{ backgroundColor: 'var(--color-accent)' }}
+                    >
+                      {profile.is_followed_by ? 'Seguir también' : 'Seguir'}
+                    </button>
+                  )}
+                  {!profile.friend_request_status && (
+                    <button
+                      onClick={handleSendRequest}
+                      disabled={requestLoading}
+                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
+                    >
+                      Enviar solicitud
+                    </button>
+                  )}
+                  {profile.friend_request_status === 'pending' && (
+                    <span className="bg-zinc-800 text-zinc-500 rounded-lg px-5 py-2 text-sm">
+                      Solicitud enviada
+                    </span>
+                  )}
+                  {profile.friend_request_status === 'accepted' && (
+                    <span className="bg-zinc-800 text-zinc-500 rounded-lg px-5 py-2 text-sm">
+                      Amigos
+                    </span>
+                  )}
+                  {profile.friend_request_status === 'rejected' && (
+                    <button
+                      onClick={handleSendRequest}
+                      disabled={requestLoading}
+                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
+                    >
+                      Enviar solicitud
+                    </button>
+                  )}
+                </div>
+                {profile.friend_request_status === 'accepted' && (
                   <button
-                    onClick={handleUnfollow}
-                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition"
-                  >
-                    Dejar de seguir
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleFollow}
-                    className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                    onClick={handleSendMessage}
+                    className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 lg:hidden"
                     style={{ backgroundColor: 'var(--color-accent)' }}
                   >
-                    {profile.is_followed_by ? 'Seguir también' : 'Seguir'}
+                    <Send size={16} className="inline-block mr-1.5" />
+                    Enviar mensaje
                   </button>
                 )}
-                {!profile.friend_request_status && (
-                  <button
-                    onClick={handleSendRequest}
-                    disabled={requestLoading}
-                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
-                  >
-                    Enviar solicitud
-                  </button>
-                )}
-                {profile.friend_request_status === 'pending' && (
-                  <span className="bg-zinc-800 text-zinc-500 rounded-lg px-5 py-2 text-sm">
-                    Solicitud enviada
-                  </span>
-                )}
-                {profile.friend_request_status === 'accepted' && (
-                  <span className="bg-zinc-800 text-zinc-500 rounded-lg px-5 py-2 text-sm">
-                    Amigos
-                  </span>
-                )}
-                {profile.friend_request_status === 'rejected' && (
-                  <button
-                    onClick={handleSendRequest}
-                    disabled={requestLoading}
-                    className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
-                  >
-                    Enviar solicitud
-                  </button>
-                )}
-              </div>
-              {profile.friend_request_status === 'accepted' && (
-                <button
-                  onClick={handleSendMessage}
-                  className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 lg:hidden"
-                  style={{ backgroundColor: 'var(--color-accent)' }}
-                >
-                  <Send size={16} className="inline-block mr-1.5" />
-                  Enviar mensaje
-                </button>
-              )}
-            </>
-          )}
+              </>
+            )}
           </div>
 
           {post && (
-            <div className="w-full max-w-sm mx-auto mt-6 px-4 lg:basis-full lg:max-w-md lg:mt-10 lg:px-0">
+            <div className="w-full max-w-sm mx-auto mt-6 px-4 lg:basis-full lg:max-w-md lg:mt-2 lg:px-0">
               <h2 className="text-center text-zinc-300 text-lg font-semibold mb-3">Publicación actual</h2>
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
                 <p className="text-zinc-100 text-lg leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
               </div>
               <div className="flex items-center justify-center gap-3">
-                {currentUser?.username?.toLowerCase() !== username.toLowerCase() ? (
+                {!isOwnProfile ? (
                   <button
                     onClick={() => handlePostLike(post.id)}
                     className="flex items-center gap-2 px-5 py-2.5 rounded-xl transition hover:opacity-90 active:scale-95"
