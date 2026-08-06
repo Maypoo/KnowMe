@@ -318,23 +318,35 @@ export default function PublicProfile() {
   if (loading || currentUserLoading) {
     return (
       <div className="min-h-full bg-zinc-950 text-zinc-100">
-        <div className="max-w-lg mx-auto px-4 py-8">
+        <div className="max-w-lg mx-auto px-4 py-8 lg:max-w-4xl">
           <SkeletonBox className="h-4 w-16 mb-8" />
-          <div className="flex flex-col items-center gap-4">
-            <SkeletonAvatar size={96} className="ring-2 ring-zinc-800" />
-            <div className="text-center flex flex-col items-center gap-2">
-              <SkeletonBox className="h-6 w-36" />
+          <div className="flex flex-col items-center gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:gap-12">
+            <SkeletonAvatar size={96} className="lg:hidden" />
+            <SkeletonAvatar size={144} className="hidden lg:block lg:shrink-0 lg:self-start" />
+            <div className="text-center flex flex-col items-center gap-2 lg:text-left lg:items-start lg:flex-1 lg:min-w-0">
+              <SkeletonBox className="h-6 w-36 lg:h-7 lg:w-44" />
               <SkeletonBox className="h-4 w-56" />
               <SkeletonBox className="h-4 w-48" />
-              <div className="flex items-center gap-4 mt-1">
+              <div className="flex items-center gap-4 mt-1 lg:hidden">
                 <SkeletonBox className="h-4 w-24" />
                 <SkeletonBox className="h-4 w-4" />
                 <SkeletonBox className="h-4 w-20" />
               </div>
             </div>
-            <div className="flex gap-3 mt-2">
-              <SkeletonBox className="h-10 w-28 rounded-lg" />
-              <SkeletonBox className="h-10 w-36 rounded-lg" />
+            <div className="hidden lg:flex lg:flex-col lg:items-stretch lg:shrink-0 lg:gap-4">
+              <div className="flex items-center justify-center gap-4">
+                <SkeletonBox className="h-4 w-24" />
+                <SkeletonBox className="h-4 w-4" />
+                <SkeletonBox className="h-4 w-20" />
+              </div>
+              <SkeletonBox className="h-10 rounded-lg" />
+            </div>
+            <div className="flex flex-col items-center gap-4 lg:flex-row lg:items-center lg:justify-center lg:basis-full lg:gap-3">
+              <div className="flex gap-3">
+                <SkeletonBox className="h-10 w-28 rounded-lg" />
+                <SkeletonBox className="h-10 w-36 rounded-lg" />
+              </div>
+              <SkeletonBox className="h-10 w-40 rounded-lg lg:hidden" />
             </div>
           </div>
         </div>
@@ -406,7 +418,7 @@ export default function PublicProfile() {
 
   return (
     <div className="min-h-full bg-zinc-950 text-zinc-100">
-      <div className="max-w-lg mx-auto px-4 py-8">
+      <div className="max-w-lg mx-auto px-4 py-8 lg:max-w-4xl lg:py-12">
         <div className="flex items-center justify-between mb-8">
           <button
             onClick={goBack}
@@ -440,20 +452,23 @@ export default function PublicProfile() {
             </div>
           )}
         </div>
-        <div className="flex flex-col items-center gap-4">
-          <button onClick={() => setShowAvatar(true)} className="transition active:scale-95">
+        <div className="flex flex-col items-center gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:gap-12">
+          <button onClick={() => setShowAvatar(true)} className="transition active:scale-95 lg:hidden">
             <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-zinc-800 cursor-pointer" />
           </button>
+          <button onClick={() => setShowAvatar(true)} className="hidden lg:block transition active:scale-95 lg:shrink-0 lg:self-start">
+            <Avatar src={profile.avatar_url} size={144} className="ring-4 ring-zinc-800 cursor-pointer" />
+          </button>
 
-          <div className="text-center">
-            <h1 className="text-xl font-semibold inline-flex items-center gap-2">
+          <div className="text-center lg:text-left lg:flex-1 lg:min-w-0">
+            <h1 className="text-xl font-semibold inline-flex items-center gap-2 lg:text-2xl">
               {profile.username}
               {profile.friend_request_status === 'accepted' && (
                 <span className={`w-2 h-2 rounded-full inline-block ${isOnline(profile.id) ? 'bg-green-500' : 'bg-zinc-600'}`} />
               )}
             </h1>
             {profile.bio && (
-              <p className="text-zinc-400 text-sm text-center max-w-sm mt-2 whitespace-pre-wrap">{profile.bio}</p>
+              <p className="text-zinc-400 text-sm text-center max-w-sm mt-2 whitespace-pre-wrap lg:text-left lg:max-w-none">{profile.bio}</p>
             )}
             {profile.show_country && profile.country ? (
               (() => {
@@ -474,7 +489,7 @@ export default function PublicProfile() {
                     {c?.name || profile.country}
                   </p>
                 ) : (
-                  <p className="text-zinc-400 text-sm mt-2 text-center">
+                  <p className="text-zinc-400 text-sm mt-2 text-center lg:text-left">
                     <img src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`} alt="" className="w-4 h-auto inline-block rounded-sm mr-1.5 -mt-0.5" />
                     {c?.name || profile.country}
                   </p>
@@ -497,23 +512,52 @@ export default function PublicProfile() {
                 Miembro desde el {new Date(profile.created_at).getDate()} de {MONTHS[new Date(profile.created_at).getMonth()]} del {new Date(profile.created_at).getFullYear()}
               </p>
             )}
-            <div className="flex items-center justify-center gap-4 mt-3 text-sm">
+            <div className="flex items-center justify-center gap-4 mt-3 text-sm lg:justify-start lg:hidden">
               <button
                 onClick={() => setShowFollowers(true)}
                 className="text-zinc-400 hover:text-zinc-200 transition"
               >
-                {profile.follower_count} seguidores
+                <strong className="font-bold">{profile.follower_count}</strong> seguidores
               </button>
               <span className="text-zinc-600">·</span>
               <button
                 onClick={() => setShowFriends(true)}
                 className="text-zinc-400 hover:text-zinc-200 transition"
               >
-                {profile.friend_count} amigos
+                <strong className="font-bold">{profile.friend_count}</strong> amigos
               </button>
             </div>
           </div>
 
+          <div className="hidden lg:flex lg:flex-col lg:items-stretch lg:shrink-0 lg:gap-4">
+            <div className="flex items-center justify-center gap-4 text-sm">
+              <button
+                onClick={() => setShowFollowers(true)}
+                className="text-zinc-400 hover:text-zinc-200 transition"
+              >
+                <strong className="font-bold">{profile.follower_count}</strong> seguidores
+              </button>
+              <span className="text-zinc-600">·</span>
+              <button
+                onClick={() => setShowFriends(true)}
+                className="text-zinc-400 hover:text-zinc-200 transition"
+              >
+                <strong className="font-bold">{profile.friend_count}</strong> amigos
+              </button>
+            </div>
+            {profile.friend_request_status === 'accepted' && (
+              <button
+                onClick={handleSendMessage}
+                className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                style={{ backgroundColor: 'var(--color-accent)' }}
+              >
+                <Send size={16} className="inline-block mr-1.5" />
+                Enviar mensaje
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-col items-center gap-4 lg:flex-row lg:items-center lg:justify-center lg:basis-full lg:gap-3">
           {currentUser?.username?.toLowerCase() === username.toLowerCase() ? (
             <button
               onClick={() => navigate('/profile/edit')}
@@ -573,7 +617,7 @@ export default function PublicProfile() {
               {profile.friend_request_status === 'accepted' && (
                 <button
                   onClick={handleSendMessage}
-                  className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                  className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 lg:hidden"
                   style={{ backgroundColor: 'var(--color-accent)' }}
                 >
                   <Send size={16} className="inline-block mr-1.5" />
@@ -582,9 +626,10 @@ export default function PublicProfile() {
               )}
             </>
           )}
+          </div>
 
           {post && (
-            <div className="w-full max-w-sm mt-6 px-4">
+            <div className="w-full max-w-sm mx-auto mt-6 px-4 lg:basis-full lg:max-w-md lg:mt-10 lg:px-0">
               <h2 className="text-center text-zinc-300 text-lg font-semibold mb-3">Publicación actual</h2>
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
                 <p className="text-zinc-100 text-lg leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
@@ -614,7 +659,7 @@ export default function PublicProfile() {
           )}
 
           {error && (
-            <p className="text-red-400 text-sm">{error}</p>
+            <p className="text-red-400 text-sm lg:basis-full lg:text-center">{error}</p>
           )}
         </div>
       </div>
