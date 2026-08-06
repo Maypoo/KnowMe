@@ -100,11 +100,11 @@ export default function NotificationsPanel() {
       if (res.ok && data.chat) {
         queryClient.invalidateQueries({ queryKey: ['chats'] })
         const chat = data.chat
-        const state = JSON.parse(localStorage.getItem('knowme_home_state') || '{}')
+        const state = JSON.parse(sessionStorage.getItem('knowme_home_state') || '{}')
         state.activeChat = chat
         state.view = 'chats'
         state.chatsView = 'list'
-        localStorage.setItem('knowme_home_state', JSON.stringify(state))
+        sessionStorage.setItem('knowme_home_state', JSON.stringify(state))
         window.location.reload()
       }
     } catch (err) {
