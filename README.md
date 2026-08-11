@@ -19,7 +19,7 @@ Esta es la primera versión de escritorio de KnowMe. Es un pre-release, no es un
 Última versión: https://github.com/Maypoo/KnowMe/releases
 
 
-<img width="1280" height="720" src="https://github.com/user-attachments/assets/a03a100e-eeb7-4214-8b14-5871c4ed3350" />
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/4b515976-07bb-4bee-8810-a5726de77718" />
 <br>
 <br>
 <img width="1280" height="720" src="https://github.com/user-attachments/assets/7f2d2244-6c2b-4955-b7c6-c4869b01bc90" />

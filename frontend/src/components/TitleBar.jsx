@@ -68,11 +68,12 @@ export default function TitleBar() {
   if (!isTauri()) return null
 
   const appWindow = getCurrentWindow()
+  const isLogin = location.pathname === '/login'
 
   return (
     <div
       data-tauri-drag-region
-      className="relative h-9 shrink-0 flex items-center bg-zinc-950 select-none"
+      className={`relative h-9 shrink-0 flex items-center select-none ${isLogin ? 'bg-transparent' : 'bg-zinc-950'}`}
     >
       <div data-tauri-drag-region className="absolute left-0 flex h-full items-center pl-3 pr-2 gap-1.5">
         <Logo size={14} />
