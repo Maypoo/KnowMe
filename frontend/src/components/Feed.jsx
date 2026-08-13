@@ -47,6 +47,17 @@ export default function Feed() {
     initialPageParam: 1,
   })
 
+  const basePosts = data?.pages.flatMap(p => p.posts) || []
+  const blockLength = basePosts.length
+  const isAll = feedMode === 'all'
+  const recycling = isAll && !hasNextPage && blockLength > 0
+  const [skipTransition, setSkipTransition] = useState(false)
+  const feedIndexRef = useRef(feedIndex)
+  feedIndexRef.current = feedIndex
+  const renderPosts = recycling ? [...basePosts, ...basePosts] : basePosts
+  const showEndCard = feedMode === 'friends' && !hasNextPage && basePosts.length > 0
+  const lastFeedIndex = basePosts.length - 1 + (showEndCard ? 1 : 0)
+
   const handleModeChange = (mode) => {
     setFeedMode(mode)
     sessionStorage.setItem('feedMode', mode)
@@ -54,18 +65,46 @@ export default function Feed() {
     setFeedIndex(0)
   }
 
-  const feedPosts = data?.pages.flatMap(p => p.posts) || []
-
   const loadNext = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage()
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
+  const goDown = useCallback(() => {
+    if (recycling) {
+      const next = feedIndexRef.current + 1
+      if (next >= 2 * blockLength) {
+        setSkipTransition(true)
+        setFeedIndex(blockLength)
+      } else {
+        setFeedIndex(next)
+      }
+      return
+    }
+    setFeedIndex(prev => {
+      const next = Math.min(prev + 1, lastFeedIndex)
+      if (next === lastFeedIndex && hasNextPage) {
+        loadNext()
+      }
+      return next
+    })
+  }, [recycling, blockLength, lastFeedIndex, hasNextPage, loadNext])
+
+  const goUp = useCallback(() => {
+    setFeedIndex(prev => Math.max(prev - 1, 0))
+  }, [])
+
   useEffect(() => {
-    if (feedPosts.length === 0) return
-    setFeedIndex(prev => Math.min(prev, feedPosts.length - 1))
-  }, [feedPosts.length])
+    if (skipTransition) setSkipTransition(false)
+  }, [skipTransition])
+
+  useEffect(() => {
+    if (renderPosts.length === 0) return
+    setFeedIndex(prev =>
+      recycling ? prev % (2 * blockLength) : Math.min(prev, lastFeedIndex)
+    )
+  }, [recycling, renderPosts.length, blockLength, lastFeedIndex])
 
   useEffect(() => {
     sessionStorage.setItem('feedIndex', feedIndex)
@@ -75,15 +114,10 @@ export default function Feed() {
     const onKeyDown = (e) => {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault()
-        const lastIndex = feedPosts.length - 1
         if (e.key === 'ArrowDown') {
-          setFeedIndex(prev => {
-            const next = Math.min(prev + 1, lastIndex)
-            if (next === lastIndex && hasNextPage) loadNext()
-            return next
-          })
+          goDown()
         } else {
-          setFeedIndex(prev => Math.max(prev - 1, 0))
+          goUp()
         }
       }
     }
@@ -92,23 +126,15 @@ export default function Feed() {
     const container = feedRef.current
     if (!container) return
 
-    const lastIndex = feedPosts.length - 1
-
     const onWheel = (e) => {
       e.preventDefault()
       if (feedCooldown.current) return
       feedCooldown.current = true
       setTimeout(() => { feedCooldown.current = false }, 600)
       if (e.deltaY > 0) {
-        setFeedIndex(prev => {
-          const next = Math.min(prev + 1, lastIndex)
-          if (next === lastIndex && hasNextPage) {
-            loadNext()
-          }
-          return next
-        })
+        goDown()
       } else {
-        setFeedIndex(prev => Math.max(prev - 1, 0))
+        goUp()
       }
     }
 
@@ -124,15 +150,9 @@ export default function Feed() {
       feedCooldown.current = true
       setTimeout(() => { feedCooldown.current = false }, 600)
       if (dy > 0) {
-        setFeedIndex(prev => {
-          const next = Math.min(prev + 1, lastIndex)
-          if (next === lastIndex && hasNextPage) {
-            loadNext()
-          }
-          return next
-        })
+        goDown()
       } else {
-        setFeedIndex(prev => Math.max(prev - 1, 0))
+        goUp()
       }
     }
 
@@ -145,7 +165,7 @@ export default function Feed() {
       container.removeEventListener('touchstart', onTouchStart)
       container.removeEventListener('touchend', onTouchEnd)
     }
-  }, [feedPosts.length, hasNextPage, loadNext])
+  }, [renderPosts.length, hasNextPage, lastFeedIndex, goDown, goUp])
 
   function updatePostInCache(postId, updater) {
     MODES.forEach(m => {
@@ -164,7 +184,7 @@ export default function Feed() {
 
   const handleFeedLike = (postId) => {
     const currentLiked = feedLikeState.current[postId]
-    const feedPost = feedPosts.find(p => p.id === postId)
+    const feedPost = basePosts.find(p => p.id === postId)
     const newLiked = currentLiked === undefined ? !feedPost?.liked_by_me : !currentLiked
     feedLikeState.current[postId] = newLiked
 
@@ -243,22 +263,13 @@ export default function Feed() {
 
       <div className="hidden lg:flex lg:flex-col lg:absolute lg:right-4 lg:top-1/2 lg:-translate-y-1/2 lg:z-10 lg:gap-2">
         <button
-          onClick={() => setFeedIndex(prev => Math.max(prev - 1, 0))}
+          onClick={goUp}
           className="rounded-full p-2 bg-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition"
         >
           <ChevronUp size={24} />
         </button>
         <button
-          onClick={() => {
-            setFeedIndex(prev => {
-              const lastIndex = feedPosts.length - 1
-              const next = Math.min(prev + 1, lastIndex)
-              if (next === lastIndex && hasNextPage) {
-                loadNext()
-              }
-              return next
-            })
-          }}
+          onClick={goDown}
           className="rounded-full p-2 bg-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition"
         >
           <ChevronDown size={24} />
@@ -277,7 +288,7 @@ export default function Feed() {
             {feedMode === 'all' && <SkeletonBox className="h-10 lg:h-12 w-36 lg:w-44 rounded-xl" />}
           </div>
         </div>
-      ) : feedPosts.length === 0 ? (
+      ) : renderPosts.length === 0 ? (
         <div className="h-full flex items-center justify-center">
           <p className="text-zinc-500">
             {feedMode === 'friends' ? 'No hay posteos de amigos aún' : 'No hay posteos aún'}
@@ -285,12 +296,14 @@ export default function Feed() {
         </div>
       ) : (
         <div
-          className="h-full transition-transform duration-300 ease-out will-change-transform"
+          className={`h-full will-change-transform ${
+            skipTransition ? '' : 'transition-transform duration-300 ease-out'
+          }`}
           style={{ transform: `translateY(-${feedIndex * 100}%)` }}
         >
-          {feedPosts.map((post, i) => (
-            <div key={post.id} className="h-full flex flex-col items-center justify-center px-6 lg:px-0">
-              {i === feedPosts.length - 1 && isFetchingNextPage && (
+          {renderPosts.map((post, i) => (
+            <div key={`${post.id}-${i}`} className="h-full flex flex-col items-center justify-center px-6 lg:px-0">
+              {!recycling && i === renderPosts.length - 1 && isFetchingNextPage && (
                 <div className="absolute bottom-4 flex items-center gap-2 text-zinc-400 text-sm">
                   <Loader2 size={16} className="animate-spin" />
                   Cargando más...
@@ -344,6 +357,13 @@ export default function Feed() {
               </div>
             </div>
           ))}
+          {showEndCard && (
+            <div className="h-full flex items-center justify-center px-6 lg:px-0">
+              <p className="text-zinc-500 text-center text-sm lg:text-base max-w-xs">
+                Ya viste todas las publicaciones actuales de tus amigos.
+              </p>
+            </div>
+          )}
         </div>
       )}
       </div>
