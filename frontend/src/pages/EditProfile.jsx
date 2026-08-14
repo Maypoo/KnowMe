@@ -506,7 +506,7 @@ export default function EditProfile() {
 
   return (
     <div className="min-h-full bg-zinc-950 text-zinc-100">
-      <div className="max-w-lg mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-8 lg:min-h-screen lg:flex lg:flex-col">
         <button
           onClick={() => navigate(-1)}
           className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition mb-8"
@@ -515,338 +515,344 @@ export default function EditProfile() {
           <ArrowLeft size={20} />
         </button>
 
-        <h1 className="text-xl font-semibold mb-8 text-center">Editar perfil</h1>
+        <h1 className="text-xl font-semibold mb-8 text-center lg:hidden">Editar perfil</h1>
 
-        <div className="flex flex-col items-center gap-8">
-          <div className="relative group">
-            <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-zinc-800" />
-            {updatingAvatar ? (
-              <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-zinc-300 border-t-transparent rounded-full animate-spin" />
+        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12 items-start lg:items-center lg:flex-1">
+          <div className="flex flex-col items-center gap-8">
+            <div className="relative group">
+              <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-zinc-800" />
+              {updatingAvatar ? (
+                <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+                  <div className="w-6 h-6 border-2 border-zinc-300 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                >
+                  <Camera size={24} className="text-zinc-200" />
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+
+            <div className="w-full max-w-sm space-y-2">
+              <label className="text-sm text-zinc-500">Nombre de usuario</label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none text-sm">@</span>
+                  <input
+                    value={usernameInput}
+                    onChange={handleUsernameChange}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-600 transition"
+                  />
+                </div>
+                <button
+                  onClick={handleSaveUsername}
+                  disabled={updatingUsername || !usernameInput || ('@' + usernameInput) === profile?.username || !usernameAvailable || (usernameLimits && usernameLimits.remaining === 0)}
+                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
+                >
+                  {updatingUsername ? 'Guardando...' : 'Guardar'}
+                </button>
               </div>
-            ) : (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-              >
-                <Camera size={24} className="text-zinc-200" />
-              </button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
+              {usernameError && (
+                <p className="text-xs text-red-400">{usernameError}</p>
+              )}
+              {usernameAvailable && (
+                <p className="text-xs text-green-400">El usuario está disponible</p>
+              )}
+              {usernameLimits && usernameLimits.remaining > 0 && (
+                <p className="text-xs text-zinc-600">Te quedan {usernameLimits.remaining} cambio{usernameLimits.remaining !== 1 ? 's' : ''} en los próximos 14 días</p>
+              )}
+              {usernameLimits && usernameLimits.remaining === 0 && usernameLimits.nextAvailable && (
+                <p className="text-xs text-amber-400">Límite alcanzado. Podrás cambiar tu nombre de usuario nuevamente a partir del {new Date(usernameLimits.nextAvailable).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              )}
+            </div>
+
+            <div className="w-full max-w-sm space-y-2">
+              <label className="text-sm text-zinc-500">Mayúsculas</label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none text-sm">@</span>
+                  <input
+                    value={displayNameInput}
+                    onChange={e => setDisplayNameInput(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-600 transition"
+                  />
+                </div>
+                <button
+                  onClick={handleSaveDisplayName}
+                  disabled={updatingDisplayName || !hasUnsavedName}
+                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
+                >
+                  {updatingDisplayName ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+              <p className="text-xs text-zinc-600">Solo podés cambiar las mayúsculas</p>
+            </div>
+
+            <div className="w-full max-w-sm space-y-2">
+              <label className="text-sm text-zinc-500">Biografía</label>
+              <textarea
+                value={bio}
+                onChange={e => {
+                  let value = e.target.value.replace(/\r\n?/g, '\n')
+                  const lines = value.split('\n')
+                  if (lines.length > 5) value = lines.slice(0, 5).join('\n')
+                  value = value.replace(/\n{3,}/g, '\n\n')
+                  setBio(value.slice(0, 100))
+                }}
+                maxLength={100}
+                rows={3}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 resize-none outline-none focus:border-zinc-600 transition"
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-600">{bio.length}/100</span>
+                <button
+                  onClick={handleSaveBio}
+                  disabled={updatingBio || !hasUnsavedBio}
+                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-1.5 transition disabled:opacity-50"
+                >
+                  {updatingBio ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="w-full max-w-sm space-y-2">
-            <label className="text-sm text-zinc-500">Nombre de usuario</label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none text-sm">@</span>
+          <div className="flex flex-col items-center gap-8">
+            <div className="w-full max-w-sm space-y-2">
+              <label className="text-sm text-zinc-500">Correo electrónico</label>
+              <input
+                value={profile.email}
+                readOnly
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-400 outline-none cursor-not-allowed"
+              />
+              <p className="text-xs text-zinc-600">Correo verificado por Google</p>
+            </div>
+
+            <div className="w-full max-w-sm space-y-2">
+              <label className="text-sm text-zinc-500">Fecha de nacimiento</label>
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <DatePicker value={birthDate} onChange={setBirthDate} />
+                </div>
+                <button
+                  onClick={handleSaveBirth}
+                  disabled={updatingBirth || (!hasBirthDateChanged && !hasShowAgeChanged)}
+                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
+                >
+                  {updatingBirth ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
-                  value={usernameInput}
-                  onChange={handleUsernameChange}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-600 transition"
+                  type="checkbox"
+                  checked={showAge}
+                  onChange={e => setShowAge(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
                 />
-              </div>
-              <button
-                onClick={handleSaveUsername}
-                disabled={updatingUsername || !usernameInput || ('@' + usernameInput) === profile?.username || !usernameAvailable || (usernameLimits && usernameLimits.remaining === 0)}
-                className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
-              >
-                {updatingUsername ? 'Guardando...' : 'Guardar'}
-              </button>
+                <span className="text-sm text-zinc-400">Mostrar edad en el perfil</span>
+              </label>
             </div>
-            {usernameError && (
-              <p className="text-xs text-red-400">{usernameError}</p>
-            )}
-            {usernameAvailable && (
-              <p className="text-xs text-green-400">El usuario está disponible</p>
-            )}
-            {usernameLimits && usernameLimits.remaining > 0 && (
-              <p className="text-xs text-zinc-600">Te quedan {usernameLimits.remaining} cambio{usernameLimits.remaining !== 1 ? 's' : ''} en los próximos 14 días</p>
-            )}
-            {usernameLimits && usernameLimits.remaining === 0 && usernameLimits.nextAvailable && (
-              <p className="text-xs text-amber-400">Límite alcanzado. Podrás cambiar tu nombre de usuario nuevamente a partir del {new Date(usernameLimits.nextAvailable).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-            )}
-          </div>
 
-          <div className="w-full max-w-sm space-y-2">
-            <label className="text-sm text-zinc-500">Mayúsculas</label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none text-sm">@</span>
+            <div className="w-full max-w-sm space-y-2">
+              <label className="text-sm text-zinc-500">País</label>
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <CountrySelect value={country} onChange={setCountry} />
+                </div>
+                <button
+                  onClick={handleSaveCountry}
+                  disabled={updatingCountry || (!hasCountryChanged && !hasShowCountryChanged)}
+                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
+                >
+                  {updatingCountry ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
-                  value={displayNameInput}
-                  onChange={e => setDisplayNameInput(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-600 transition"
+                  type="checkbox"
+                  checked={showCountry}
+                  onChange={e => setShowCountry(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
                 />
-              </div>
-              <button
-                onClick={handleSaveDisplayName}
-                disabled={updatingDisplayName || !hasUnsavedName}
-                className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
-              >
-                {updatingDisplayName ? 'Guardando...' : 'Guardar'}
-              </button>
+                <span className="text-sm text-zinc-400">Mostrar país en el perfil</span>
+              </label>
             </div>
-            <p className="text-xs text-zinc-600">Solo podés cambiar las mayúsculas</p>
-          </div>
 
-          <div className="w-full max-w-sm space-y-2">
-            <label className="text-sm text-zinc-500">Biografía</label>
-            <textarea
-              value={bio}
-              onChange={e => {
-                let value = e.target.value.replace(/\r\n?/g, '\n')
-                const lines = value.split('\n')
-                if (lines.length > 5) value = lines.slice(0, 5).join('\n')
-                value = value.replace(/\n{3,}/g, '\n\n')
-                setBio(value.slice(0, 100))
-              }}
-              maxLength={100}
-              rows={3}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 resize-none outline-none focus:border-zinc-600 transition"
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-zinc-600">{bio.length}/100</span>
+            <div className="w-full max-w-sm space-y-2">
+              <label className="text-sm text-zinc-500">Privacidad</label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showActivity}
+                  onChange={e => setShowActivity(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
+                />
+                <span className="text-sm text-zinc-400">Mostrar actividad a mis amigos</span>
+                <button
+                  onClick={handleSaveActivity}
+                  disabled={updatingActivity || showActivity === initialActivity}
+                  className="ml-auto text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-1.5 transition disabled:opacity-50"
+                >
+                  {updatingActivity ? 'Guardando...' : 'Guardar'}
+                </button>
+              </label>
+            </div>
+
+            <div className="w-full max-w-sm pt-4 border-t border-zinc-800 lg:border-t-0">
               <button
-                onClick={handleSaveBio}
-                disabled={updatingBio || !hasUnsavedBio}
-                className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-1.5 transition disabled:opacity-50"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg px-3 py-2 transition"
               >
-                {updatingBio ? 'Guardando...' : 'Guardar'}
+                Eliminar perfil
               </button>
             </div>
           </div>
+        </div>
 
-          <div className="w-full max-w-sm space-y-2">
-            <label className="text-sm text-zinc-500">Correo electrónico</label>
-            <input
-              value={profile.email}
-              readOnly
-              className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-400 outline-none cursor-not-allowed"
-            />
-            <p className="text-xs text-zinc-600">Correo verificado por Google</p>
-          </div>
-
-          <div className="w-full max-w-sm space-y-2">
-            <label className="text-sm text-zinc-500">Fecha de nacimiento</label>
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <DatePicker value={birthDate} onChange={setBirthDate} />
-              </div>
-              <button
-                onClick={handleSaveBirth}
-                disabled={updatingBirth || (!hasBirthDateChanged && !hasShowAgeChanged)}
-                className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
-              >
-                {updatingBirth ? 'Guardando...' : 'Guardar'}
-              </button>
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showAge}
-                onChange={e => setShowAge(e.target.checked)}
-                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
-              />
-              <span className="text-sm text-zinc-400">Mostrar edad en el perfil</span>
-            </label>
-          </div>
-
-          <div className="w-full max-w-sm space-y-2">
-            <label className="text-sm text-zinc-500">País</label>
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <CountrySelect value={country} onChange={setCountry} />
-              </div>
-              <button
-                onClick={handleSaveCountry}
-                disabled={updatingCountry || (!hasCountryChanged && !hasShowCountryChanged)}
-                className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
-              >
-                {updatingCountry ? 'Guardando...' : 'Guardar'}
-              </button>
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showCountry}
-                onChange={e => setShowCountry(e.target.checked)}
-                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
-              />
-              <span className="text-sm text-zinc-400">Mostrar país en el perfil</span>
-            </label>
-          </div>
-
-          <div className="w-full max-w-sm space-y-2">
-            <label className="text-sm text-zinc-500">Privacidad</label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showActivity}
-                onChange={e => setShowActivity(e.target.checked)}
-                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
-              />
-              <span className="text-sm text-zinc-400">Mostrar actividad a mis amigos</span>
-              <button
-                onClick={handleSaveActivity}
-                disabled={updatingActivity || showActivity === initialActivity}
-                className="ml-auto text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-1.5 transition disabled:opacity-50"
-              >
-                {updatingActivity ? 'Guardando...' : 'Guardar'}
-              </button>
-            </label>
-          </div>
-
-          <div className="w-full max-w-sm pt-4 border-t border-zinc-800">
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="w-full text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg px-3 py-2 transition"
-            >
-              Eliminar perfil
-            </button>
-          </div>
-
-          {showEditor && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60">
-              <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
-                <h2 className="text-lg font-semibold text-center">Editar foto</h2>
-                <div className="flex justify-center">
-                  <div
-                    className="relative w-60 h-60 rounded-full overflow-hidden bg-zinc-800 cursor-grab active:cursor-grabbing select-none"
-                    onMouseDown={handleEditorMouseDown}
-                    onTouchStart={handleEditorTouchStart}
-                  >
-                    {imageNatural.w ? (
+        {showEditor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60">
+            <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
+              <h2 className="text-lg font-semibold text-center">Editar foto</h2>
+              <div className="flex justify-center">
+                <div
+                  className="relative w-60 h-60 rounded-full overflow-hidden bg-zinc-800 cursor-grab active:cursor-grabbing select-none"
+                  onMouseDown={handleEditorMouseDown}
+                  onTouchStart={handleEditorTouchStart}
+                >
+                  {imageNatural.w ? (
+                    <div
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: '50%',
+                        top: '50%',
+                        width: 0,
+                        height: 0,
+                        transform: `translate(${position.x}px, ${position.y}px)`,
+                        transformOrigin: '0 0',
+                      }}
+                    >
                       <div
-                        className="absolute pointer-events-none"
                         style={{
-                          left: '50%',
-                          top: '50%',
-                          width: 0,
-                          height: 0,
-                          transform: `translate(${position.x}px, ${position.y}px)`,
+                          transform: `rotate(${rotation}deg)${flipH ? ' scaleX(-1)' : ''}`,
                           transformOrigin: '0 0',
                         }}
                       >
-                        <div
+                        <img
+                          src={editorPreviewUrl}
+                          alt="Preview"
+                          draggable={false}
                           style={{
-                            transform: `rotate(${rotation}deg)${flipH ? ' scaleX(-1)' : ''}`,
-                            transformOrigin: '0 0',
+                            position: 'absolute',
+                            left: `${-displayW / 2}px`,
+                            top: `${-displayH / 2}px`,
+                            width: `${displayW}px`,
+                            height: `${displayH}px`,
+                            maxWidth: 'none',
                           }}
-                        >
-                          <img
-                            src={editorPreviewUrl}
-                            alt="Preview"
-                            draggable={false}
-                            style={{
-                              position: 'absolute',
-                              left: `${-displayW / 2}px`,
-                              top: `${-displayH / 2}px`,
-                              width: `${displayW}px`,
-                              height: `${displayH}px`,
-                              maxWidth: 'none',
-                            }}
-                          />
-                        </div>
+                        />
                       </div>
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-6 h-6 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex justify-center">
-                  <div className="flex items-center gap-1.5 w-36">
-                    <span className="text-xs text-zinc-600 select-none w-3 text-center leading-none">−</span>
-                    <input
-                      type="range"
-                      min="1"
-                      max="5"
-                      step="0.1"
-                      value={zoom}
-                      onChange={e => setZoom(Number(e.target.value))}
-                      className="flex-1 h-1.5 accent-accent cursor-pointer"
-                    />
-                    <span className="text-xs text-zinc-600 select-none w-3 text-center leading-none">+</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => setRotation(r => (r + 90) % 360)}
-                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition"
-                    title="Rotar"
-                  >
-                    <RotateCw size={16} />
-                  </button>
-                  <button
-                    onClick={() => setFlipH(f => !f)}
-                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition"
-                    title="Voltear horizontal"
-                  >
-                    <FlipHorizontal2 size={16} />
-                  </button>
-                  <button
-                    onClick={handleReset}
-                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition"
-                    title="Restablecer"
-                  >
-                    <Eraser size={16} />
-                  </button>
-                </div>
-                <div className="flex items-center justify-center gap-3">
-                  <button
-                    onClick={handleCancelEditor}
-                    className="text-sm text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-5 py-2 transition"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleSaveEditor}
-                    className="text-sm text-white rounded-lg px-5 py-2 transition"
-                    style={{ backgroundColor: 'var(--color-accent)' }}
-                  >
-                    Guardar
-                  </button>
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-6 h-6 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
-
-          {showDeleteConfirm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60">
-              <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center space-y-4">
-                <p className="text-sm text-zinc-300">
-                  Para eliminar tu perfil necesitamos que inicies sesión con Google para confirmar tu identidad.
-                </p>
-                <div className="flex gap-3 justify-center">
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="text-sm text-zinc-500 hover:text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-4 py-2 transition"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleDeleteAccount}
-                    className="text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg px-4 py-2 transition"
-                  >
-                    Iniciar sesión con Google
-                  </button>
+              <div className="flex justify-center">
+                <div className="flex items-center gap-1.5 w-36">
+                  <span className="text-xs text-zinc-600 select-none w-3 text-center leading-none">−</span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    step="0.1"
+                    value={zoom}
+                    onChange={e => setZoom(Number(e.target.value))}
+                    className="flex-1 h-1.5 accent-accent cursor-pointer"
+                  />
+                  <span className="text-xs text-zinc-600 select-none w-3 text-center leading-none">+</span>
                 </div>
               </div>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setRotation(r => (r + 90) % 360)}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition"
+                  title="Rotar"
+                >
+                  <RotateCw size={16} />
+                </button>
+                <button
+                  onClick={() => setFlipH(f => !f)}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition"
+                  title="Voltear horizontal"
+                >
+                  <FlipHorizontal2 size={16} />
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition"
+                  title="Restablecer"
+                >
+                  <Eraser size={16} />
+                </button>
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={handleCancelEditor}
+                  className="text-sm text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-5 py-2 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveEditor}
+                  className="text-sm text-white rounded-lg px-5 py-2 transition"
+                  style={{ backgroundColor: 'var(--color-accent)' }}
+                >
+                  Guardar
+                </button>
+              </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {error && (
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60">
+            <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center space-y-4">
+              <p className="text-sm text-zinc-300">
+                Para eliminar tu perfil necesitamos que inicies sesión con Google para confirmar tu identidad.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="text-sm text-zinc-500 hover:text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-4 py-2 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  className="text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg px-4 py-2 transition"
+                >
+                  Iniciar sesión con Google
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-6 text-center">
             <p className="text-red-400 text-sm">{error}</p>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )

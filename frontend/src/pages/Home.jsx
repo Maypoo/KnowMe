@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
-import { Search, Settings, Plus } from 'lucide-react'
+import { Search, Settings2, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import { useTitleBar } from '../lib/TitleBarContext'
@@ -640,7 +640,7 @@ export default function Home() {
                 onClick={() => setPreferencesOpen(true)}
                 className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition lg:hidden max-[420px]:hidden"
               >
-                <Settings size={20} />
+                <Settings2 size={20} />
               </button>
               <button
                 onClick={() => { setView('search'); setSearchQuery(''); setSearchResults([]); setSearched(false) }}
