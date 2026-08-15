@@ -45,8 +45,40 @@ export default function FriendsList() {
     ? friends.filter(f => f.username.toLowerCase().includes(search.trim().toLowerCase()))
     : friends
 
+  const onlineFriends = filtered.filter(f => isOnline(f.id))
+  const offlineFriends = filtered.filter(f => !isOnline(f.id))
+
   const hasFriends = friends.length > 0
   const showList = hasFriends && filtered.length > 0
+
+  const renderFriend = (f) => (
+    <li key={f.id} className="bg-zinc-900 rounded-lg px-4 py-3 flex items-center justify-between">
+      <button onClick={() => navigate(`/${f.username}`)} className="flex items-center gap-3 hover:opacity-80 transition">
+        <div className="relative">
+          <Avatar src={f.avatar_url} size={32} />
+          {isOnline(f.id) ? (
+            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-zinc-900" />
+          ) : f.last_seen_at ? (
+            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-zinc-600 ring-2 ring-zinc-900" />
+          ) : null}
+        </div>
+        <div className="flex flex-col items-start">
+          <span className="text-zinc-100 text-sm">{f.username}</span>
+          {isOnline(f.id) ? (
+            <span className="text-green-500 text-xs">En línea</span>
+          ) : f.last_seen_at ? (
+            <span className="text-zinc-500 text-xs">Conectado {timeAgo(f.last_seen_at)}</span>
+          ) : null}
+        </div>
+      </button>
+      <button
+        onClick={() => setConfirming(f)}
+        className="text-zinc-600 hover:text-red-400 transition"
+      >
+        <X size={18} />
+      </button>
+    </li>
+  )
 
   return (
     <div className={showList || isLoading ? '' : 'flex-1 flex flex-col'}>
@@ -77,42 +109,26 @@ export default function FriendsList() {
         </>
       ) : hasFriends && (
         <>
-          <h3 className="text-zinc-400 text-sm font-medium mb-3">Amigos</h3>
-          {filtered.length === 0 ? (
+          {onlineFriends.length > 0 && (
+            <>
+              <h3 className="text-zinc-400 text-sm font-medium mb-3">Conectado</h3>
+              <ul className="space-y-1 mb-4">
+                {onlineFriends.map(renderFriend)}
+              </ul>
+            </>
+          )}
+          {offlineFriends.length > 0 && (
+            <>
+              <h3 className="text-zinc-400 text-sm font-medium mb-3">Amigos</h3>
+              <ul className="space-y-1">
+                {offlineFriends.map(renderFriend)}
+              </ul>
+            </>
+          )}
+          {filtered.length === 0 && (
             <div className="flex-1 flex items-center justify-center">
               <p className="text-zinc-600 text-sm">No se encontraron amigos.</p>
             </div>
-          ) : (
-            <ul className="space-y-1">
-              {filtered.map(f => (
-                <li key={f.id} className="bg-zinc-900 rounded-lg px-4 py-3 flex items-center justify-between">
-                  <button onClick={() => navigate(`/${f.username}`)} className="flex items-center gap-3 hover:opacity-80 transition">
-                    <div className="relative">
-                      <Avatar src={f.avatar_url} size={32} />
-                      {isOnline(f.id) ? (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-zinc-900" />
-                      ) : f.last_seen_at ? (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-zinc-600 ring-2 ring-zinc-900" />
-                      ) : null}
-                    </div>
-                    <div className="flex flex-col items-start">
-                      <span className="text-zinc-100 text-sm">{f.username}</span>
-                      {isOnline(f.id) ? (
-                        <span className="text-green-500 text-xs">En línea</span>
-                      ) : f.last_seen_at ? (
-                        <span className="text-zinc-500 text-xs">Conectado {timeAgo(f.last_seen_at)}</span>
-                      ) : null}
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setConfirming(f)}
-                    className="text-zinc-600 hover:text-red-400 transition"
-                  >
-                    <X size={18} />
-                  </button>
-                </li>
-              ))}
-            </ul>
           )}
         </>
       )}
