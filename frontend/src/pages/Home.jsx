@@ -67,6 +67,7 @@ export default function Home() {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false)
+  const [likesOpen, setLikesOpen] = useState(false)
   const [selectedTagNames, setSelectedTagNames] = useState([])
   const dropdownRef = useRef(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -742,6 +743,8 @@ export default function Home() {
                 handleEdit={handleEdit}
                 handleCancel={handleCancel}
                 setConfirmingDelete={setConfirmingDelete}
+                likesOpen={likesOpen}
+                setLikesOpen={setLikesOpen}
               />
             ) : view === 'notifications' ? (
               <NotificationsPanel />

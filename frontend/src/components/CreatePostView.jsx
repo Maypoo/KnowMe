@@ -1,6 +1,7 @@
 import { Heart, Trash2, Settings, Edit } from 'lucide-react'
 import NumberFlow from '@number-flow/react'
 import TagSelectorModal from './TagSelectorModal'
+import LikesList from './LikesList'
 
 export default function CreatePostView({
   postContent, setPostContent,
@@ -10,7 +11,8 @@ export default function CreatePostView({
   tagSelectorOpen, setTagSelectorOpen,
   handlePublish, handleSaveTags,
   handleEdit, handleCancel,
-  setConfirmingDelete
+  setConfirmingDelete,
+  likesOpen, setLikesOpen
 }) {
   return (
     <div className="flex-1 flex items-center justify-center px-6">
@@ -93,9 +95,18 @@ export default function CreatePostView({
           </div>
         </div>
         <div className="w-full flex items-center gap-1.5 text-zinc-400 text-sm">
-          <Heart size={14} strokeWidth={2} className="text-red-400" fill="#f87171" />
-          <NumberFlow value={postLikes} suffix={` like${postLikes !== 1 ? 's' : ''}`} />
+          <button
+            onClick={() => setLikesOpen(true)}
+            disabled={!myPost}
+            className="flex items-center gap-1.5 hover:text-zinc-200 transition disabled:cursor-not-allowed"
+          >
+            <Heart size={14} strokeWidth={2} className="text-red-400" fill="#f87171" />
+            <NumberFlow value={postLikes} suffix={` like${postLikes !== 1 ? 's' : ''}`} />
+          </button>
         </div>
+        {likesOpen && myPost && (
+          <LikesList postId={myPost.id} onClose={() => setLikesOpen(false)} />
+        )}
         <TagSelectorModal
           open={tagSelectorOpen}
           onClose={() => setTagSelectorOpen(false)}

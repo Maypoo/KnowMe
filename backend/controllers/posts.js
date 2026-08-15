@@ -472,6 +472,47 @@ export const unlike = asyncHandler(async (req, res) => {
   res.json({ unliked: true, likesCount: count })
 })
 
+export const getLikes = asyncHandler(async (req, res) => {
+  const { data: post, error: postError } = await supabase
+    .from('posts')
+    .select('id')
+    .eq('id', req.params.id)
+    .maybeSingle()
+
+  if (postError) return res.status(500).json({ error: 'Error al verificar post' })
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' })
+
+  const { data: likeRows, error: likeError } = await supabase
+    .from('post_likes')
+    .select('user_id')
+    .eq('post_id', post.id)
+    .order('created_at', { ascending: false })
+
+  if (likeError) return res.status(400).json({ error: 'Error al obtener likes' })
+
+  if (likeRows.length === 0) {
+    return res.json({ likes: [] })
+  }
+
+  const blockRows = await getBlockRowsForUser(req.user.id)
+  const excluded = new Set([...blockRows.blockedByMe, ...blockRows.blockedByThem])
+
+  const likerIds = likeRows.map(l => l.user_id)
+
+  const { data: profiles, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', likerIds)
+
+  if (profileError) return res.status(400).json({ error: 'Error al obtener perfiles' })
+
+  const filteredProfiles = (profiles || []).filter(p => !excluded.has(p.id))
+  filteredProfiles.sort((a, b) => likerIds.indexOf(a.id) - likerIds.indexOf(b.id))
+
+  const mapped = filteredProfiles.map(p => ({ ...p, username: p.display_name || p.username }))
+  res.json({ likes: mapped })
+})
+
 export const getUserPosts = asyncHandler(async (req, res) => {
   const { username } = req.params
   const sanitized = sanitize(username)
