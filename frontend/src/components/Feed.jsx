@@ -11,6 +11,9 @@ const MODES = [
   { key: 'all', label: 'Conocer' },
 ]
 
+const TRANSITION_MS = 300
+const COPY_COUNT = 3
+
 export default function Feed() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -52,11 +55,14 @@ export default function Feed() {
   const isAll = feedMode === 'all'
   const recycling = isAll && !hasNextPage && blockLength > 0
   const [skipTransition, setSkipTransition] = useState(false)
-  const feedIndexRef = useRef(feedIndex)
-  feedIndexRef.current = feedIndex
-  const renderPosts = recycling ? [...basePosts, ...basePosts] : basePosts
+  const renderPosts = recycling
+    ? Array.from({ length: COPY_COUNT }).flatMap(() => basePosts)
+    : basePosts
+  const middleCopyStart = blockLength
+  const lastCopyStart = (COPY_COUNT - 1) * blockLength
   const showEndCard = feedMode === 'friends' && !hasNextPage && basePosts.length > 0
-  const lastFeedIndex = basePosts.length - 1 + (showEndCard ? 1 : 0)
+  const loadingSlot = hasNextPage && basePosts.length > 0
+  const lastFeedIndex = basePosts.length - 1 + (showEndCard ? 1 : 0) + (loadingSlot ? 1 : 0)
 
   const handleModeChange = (mode) => {
     setFeedMode(mode)
@@ -73,13 +79,7 @@ export default function Feed() {
 
   const goDown = useCallback(() => {
     if (recycling) {
-      const next = feedIndexRef.current + 1
-      if (next >= 2 * blockLength) {
-        setSkipTransition(true)
-        setFeedIndex(blockLength)
-      } else {
-        setFeedIndex(next)
-      }
+      setFeedIndex(prev => Math.min(prev + 1, lastCopyStart))
       return
     }
     setFeedIndex(prev => {
@@ -89,22 +89,39 @@ export default function Feed() {
       }
       return next
     })
-  }, [recycling, blockLength, lastFeedIndex, hasNextPage, loadNext])
+  }, [recycling, lastCopyStart, lastFeedIndex, hasNextPage, loadNext])
 
   const goUp = useCallback(() => {
     setFeedIndex(prev => Math.max(prev - 1, 0))
   }, [])
 
   useEffect(() => {
-    if (skipTransition) setSkipTransition(false)
-  }, [skipTransition])
+    if (!recycling || feedIndex < lastCopyStart) return
+    const timer = setTimeout(() => {
+      setSkipTransition(true)
+      setFeedIndex(middleCopyStart)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setSkipTransition(false)
+        })
+      })
+    }, TRANSITION_MS)
+    return () => clearTimeout(timer)
+  }, [feedIndex, recycling, lastCopyStart, middleCopyStart])
 
   useEffect(() => {
     if (renderPosts.length === 0) return
     setFeedIndex(prev =>
-      recycling ? prev % (2 * blockLength) : Math.min(prev, lastFeedIndex)
+      recycling ? Math.min(prev, lastCopyStart) : Math.min(prev, lastFeedIndex)
     )
-  }, [recycling, renderPosts.length, blockLength, lastFeedIndex])
+  }, [recycling, renderPosts.length, lastCopyStart, lastFeedIndex])
+
+  useEffect(() => {
+    if (recycling || blockLength === 0) return
+    if (hasNextPage && feedIndex >= blockLength - 3) {
+      loadNext()
+    }
+  }, [feedIndex, blockLength, hasNextPage, loadNext, recycling])
 
   useEffect(() => {
     sessionStorage.setItem('feedIndex', feedIndex)
@@ -296,19 +313,14 @@ export default function Feed() {
         </div>
       ) : (
         <div
-          className={`h-full will-change-transform ${
-            skipTransition ? '' : 'transition-transform duration-300 ease-out'
-          }`}
-          style={{ transform: `translateY(-${feedIndex * 100}%)` }}
+          className="h-full will-change-transform"
+          style={{
+            transform: `translateY(-${feedIndex * 100}%)`,
+            transition: skipTransition ? 'none' : `transform ${TRANSITION_MS}ms ease-out`,
+          }}
         >
           {renderPosts.map((post, i) => (
             <div key={`${post.id}-${i}`} className="h-full flex flex-col items-center justify-center px-6 lg:px-0">
-              {!recycling && i === renderPosts.length - 1 && isFetchingNextPage && (
-                <div className="absolute bottom-4 flex items-center gap-2 text-zinc-400 text-sm">
-                  <Loader2 size={16} className="animate-spin" />
-                  Cargando más...
-                </div>
-              )}
               <button onClick={() => navigate('/' + post.username)} className="flex items-center gap-3 mb-6 lg:mb-8 hover:opacity-80 transition">
                 <Avatar src={post.avatar_url} size={40} />
                 <span className="text-zinc-100 font-medium text-sm lg:text-base">{post.display_name || post.username}</span>
@@ -357,6 +369,18 @@ export default function Feed() {
               </div>
             </div>
           ))}
+          {loadingSlot && (
+            <div className="h-full flex flex-col items-center justify-center gap-3 px-6 lg:px-0">
+              {isFetchingNextPage ? (
+                <>
+                  <Loader2 size={20} className="animate-spin text-zinc-400" />
+                  <span className="text-zinc-400 text-sm">Cargando más...</span>
+                </>
+              ) : (
+                <span className="text-zinc-500 text-sm">Desliza para cargar más</span>
+              )}
+            </div>
+          )}
           {showEndCard && (
             <div className="h-full flex items-center justify-center px-6 lg:px-0">
               <p className="text-zinc-500 text-center text-sm lg:text-base max-w-xs">
