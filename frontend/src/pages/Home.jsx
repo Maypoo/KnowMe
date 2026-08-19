@@ -21,6 +21,7 @@ import PendingRequests from '../components/PendingRequests'
 import ChatsList from '../components/ChatsList'
 import ChatConversation from '../components/ChatConversation'
 import NewChat from '../components/NewChat'
+import NewGroup from '../components/NewGroup'
 import VoiceCall from '../components/VoiceCall'
 import NotificationsPanel from '../components/NotificationsPanel'
 import BlockedList from '../components/BlockedList'
@@ -40,7 +41,7 @@ function loadSavedState() {
     const parsed = JSON.parse(raw)
     if (parsed.view && !['friends', 'chats', 'search', 'home', 'notifications', 'plus'].includes(parsed.view)) return null
     if (parsed.tab && !['friends', 'add', 'requests'].includes(parsed.tab)) return null
-    if (parsed.chatsView && !['list', 'new'].includes(parsed.chatsView)) return null
+    if (parsed.chatsView && !['list', 'new', 'newGroup'].includes(parsed.chatsView)) return null
     return parsed
   } catch (err) {
     console.error(err)
@@ -58,6 +59,7 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [tab, setTab] = useState(saved.current?.tab ?? 'friends')
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false)
   const [view, setView] = useState(saved.current?.view ?? 'home')
   const [chatsView, setChatsView] = useState(saved.current?.chatsView ?? 'list')
   const [activeChat, setActiveChat] = useState(saved.current?.activeChat ?? null)
@@ -70,6 +72,7 @@ export default function Home() {
   const [likesOpen, setLikesOpen] = useState(false)
   const [selectedTagNames, setSelectedTagNames] = useState([])
   const dropdownRef = useRef(null)
+  const plusMenuRef = useRef(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -96,6 +99,9 @@ export default function Home() {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setDropdownOpen(false)
+      }
+      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target)) {
+        setPlusMenuOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -165,6 +171,10 @@ export default function Home() {
       queryClient.invalidateQueries({ queryKey: ['chats'] })
     }
 
+    const handleGroupUpdated = () => {
+      queryClient.invalidateQueries({ queryKey: ['chats'] })
+    }
+
     const handleNotification = () => {
       queryClient.invalidateQueries({ queryKey: ['notificationsUnread'] })
     }
@@ -225,6 +235,8 @@ export default function Home() {
     socket.on('friend_request_cancelled', handleRequestCancelled)
     socket.on('new_message', handleNewMessage)
     socket.on('chat_created', handleChatCreated)
+    socket.on('group_created', handleGroupUpdated)
+    socket.on('group_updated', handleGroupUpdated)
     socket.on('notification', handleNotification)
     socket.on('notifications_cleared', handleNotificationsCleared)
     socket.on('messages_read', handleMessagesRead)
@@ -240,6 +252,8 @@ export default function Home() {
       socket.off('friend_request_cancelled', handleRequestCancelled)
       socket.off('new_message', handleNewMessage)
       socket.off('chat_created', handleChatCreated)
+      socket.off('group_created', handleGroupUpdated)
+      socket.off('group_updated', handleGroupUpdated)
       socket.off('notification', handleNotification)
       socket.off('notifications_cleared', handleNotificationsCleared)
       socket.off('messages_read', handleMessagesRead)
@@ -335,11 +349,13 @@ export default function Home() {
       home: 'home',
       plus: 'plus',
       notifications: 'notifications',
-      chats: chatsView === 'new' ? 'newchat' : activeChat ? 'chat' : 'chats',
+      chats: chatsView === 'new' ? 'newchat' : chatsView === 'newGroup' ? 'newgroup' : activeChat ? 'chat' : 'chats',
       friends: tab === 'add' ? 'add' : tab === 'requests' ? 'requests' : 'friends',
     }
-    const label = view === 'chats' && chatsView !== 'new' && activeChat
-      ? activeChat.otherUser?.username ? `Chat (${activeChat.otherUser.username})` : 'Chat'
+    const label = view === 'chats' && chatsView !== 'new' && chatsView !== 'newGroup' && activeChat
+      ? activeChat.isGroup
+        ? `Grupo (${activeChat.name || 'Sin nombre'})`
+        : activeChat.otherUser?.username ? `Chat (${activeChat.otherUser.username})` : 'Chat'
       : null
     setTitle({ key: keys[view] || 'default', label })
   }, [view, tab, chatsView, activeChat, setTitle])
@@ -376,6 +392,7 @@ export default function Home() {
   const handleSelectChat = (chat) => {
     setActiveChat(chat)
     setChatsView('list')
+    setPlusMenuOpen(false)
     if (incomingCall && chat.otherUser?.id === incomingCall.from.id) {
       setIncomingCallSeen(true)
     }
@@ -383,6 +400,16 @@ export default function Home() {
 
   const handleNewChat = () => {
     setChatsView('new')
+  }
+
+  const handleNewGroup = () => {
+    setChatsView('newGroup')
+  }
+
+  const handleCreateGroup = (groupChat) => {
+    setActiveChat(groupChat)
+    setChatsView('list')
+    queryClient.invalidateQueries({ queryKey: ['chats'] })
   }
 
   const handleBackFromConversation = () => {
@@ -752,21 +779,42 @@ export default function Home() {
               <>
                 {chatsView === 'new' ? (
                   <NewChat onSelectFriend={handleSelectFriend} onBack={handleBackFromNewChat} />
+                ) : chatsView === 'newGroup' ? (
+                  <NewGroup onBack={handleBackFromNewChat} onCreateGroup={handleCreateGroup} />
                 ) : (
                   <div className="flex-1 flex flex-col lg:flex-row min-h-0 lg:gap-4">
                     <div className={`${activeChat ? 'hidden lg:flex' : 'flex'} flex-col lg:w-96 min-h-0 shrink-0 lg:pr-4`}>
                       <section className="flex-1 flex flex-col min-h-0">
                         <div className="flex items-center justify-between mb-4">
                           <h2 className="text-zinc-100 text-lg font-semibold">Chats</h2>
-                          <button
-                            onClick={handleNewChat}
-                            className="rounded-full p-2 transition hover:opacity-80"
-                            style={{ backgroundColor: 'var(--color-accent)' }}
-                          >
-                            <Plus size={20} strokeWidth={2.5} />
-                          </button>
+                          <div className="relative">
+                            <button
+                              onClick={() => setPlusMenuOpen(!plusMenuOpen)}
+                              className="rounded-full p-2 transition hover:opacity-80"
+                              style={{ backgroundColor: 'var(--color-accent)' }}
+                            >
+                              <Plus size={20} strokeWidth={2.5} />
+                            </button>
+                            {plusMenuOpen && (
+                              <div ref={plusMenuRef} className="absolute right-0 mt-2 w-44 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1 z-50">
+                                <button
+                                  onClick={() => { setPlusMenuOpen(false); handleNewChat() }}
+                                  className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
+                                >
+                                  Nuevo chat
+                                </button>
+                                <button
+                                  onClick={() => { setPlusMenuOpen(false); handleNewGroup() }}
+                                  className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
+                                >
+                                  Nuevo grupo
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <ChatsList
+                          profile={profile}
                           onSelectChat={handleSelectChat}
                           incomingCall={incomingCall}
                         />
@@ -774,7 +822,7 @@ export default function Home() {
                     </div>
                     <div className={`${activeChat ? 'flex' : 'hidden lg:flex'} flex-1 flex-col min-h-0`}>
                       {activeChat ? (
-                        <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} incomingCall={incomingCall} onJoinCall={(callerUser, sdp) => { setIncomingCall(null); setIncomingCallSeen(false); voiceCallRef.current?.joinCall(callerUser, sdp) }} onClearIncomingCall={() => { setIncomingCall(null); setIncomingCallSeen(false) }} />
+                        <ChatConversation chat={activeChat} onBack={handleBackFromConversation} profile={profile} onStartCall={(user) => voiceCallRef.current?.startCall(user)} incomingCall={incomingCall} onJoinCall={(callerUser, sdp) => { setIncomingCall(null); setIncomingCallSeen(false); voiceCallRef.current?.joinCall(callerUser, sdp) }} onClearIncomingCall={() => { setIncomingCall(null); setIncomingCallSeen(false) }} onLeft={handleBackFromConversation} />
                       ) : (
                         <div className="flex-1 flex items-center justify-center">
                           <p className="text-zinc-500 text-lg">Selecciona un chat para empezar</p>

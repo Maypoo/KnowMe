@@ -4,10 +4,11 @@ import { Phone } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
+import GroupAvatar from './GroupAvatar'
 import { SkeletonBox, SkeletonAvatar } from './Skeleton'
 import { useOnlineUsers } from '../lib/OnlineUsersContext'
 
-export default function ChatsList({ onSelectChat, incomingCall }) {
+export default function ChatsList({ profile, onSelectChat, incomingCall }) {
   const queryClient = useQueryClient()
   const { isOnline } = useOnlineUsers()
   const [typingChats, setTypingChats] = useState({})
@@ -100,27 +101,35 @@ export default function ChatsList({ onSelectChat, incomingCall }) {
       ) : (
         <ul className="space-y-1">
           {chats.map(chat => {
+            const title = chat.isGroup ? (chat.name || 'Grupo') : (chat.otherUser?.username || 'Desconocido')
             return (
               <li key={chat.id}>
                 <button
                   onClick={() => onSelectChat(chat)}
                   className="w-full rounded-lg px-4 py-3 flex items-center gap-3 transition bg-zinc-900 hover:bg-zinc-800"
                 >
-                  <div className="relative">
-                    <Avatar src={chat.otherUser?.avatar_url} size={40} />
-                    {isOnline(chat.otherUser?.id) ? (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 ring-2 ring-zinc-950" />
-                    ) : chat.otherUser?.last_seen_at ? (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-zinc-600 ring-2 ring-zinc-950" />
-                    ) : null}
-                  </div>
-                    <div className="flex-1 min-w-0 text-left">
+                  {chat.isGroup ? (
+                    <GroupAvatar iconUrl={chat.icon_url} size={40} />
+                  ) : (
+                    <div className="relative">
+                      <Avatar src={chat.otherUser?.avatar_url} size={40} />
+                      {isOnline(chat.otherUser?.id) ? (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 ring-2 ring-zinc-950" />
+                      ) : chat.otherUser?.last_seen_at ? (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-zinc-600 ring-2 ring-zinc-950" />
+                      ) : null}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center justify-between">
-                      <span className="text-zinc-100 text-sm font-medium">
-                        {chat.otherUser?.username || 'Desconocido'}
+                      <span className="text-zinc-100 text-sm font-medium truncate">
+                        {title}
+                        {chat.isGroup && chat.memberCount > 0 && (
+                          <span className="text-zinc-500 font-normal"> · {chat.memberCount}</span>
+                        )}
                       </span>
                       <div className="flex items-center gap-2">
-                        {incomingCall && incomingCall.from.id === chat.otherUser?.id && (
+                        {incomingCall && chat.otherUser?.id === incomingCall.from.id && (
                           <span
                             className="rounded-full flex items-center justify-center"
                             style={{
@@ -155,10 +164,10 @@ export default function ChatsList({ onSelectChat, incomingCall }) {
                       </div>
                     </div>
                     <p className="text-zinc-500 text-sm truncate">
-                      {typingChats[chat.id] && isOnline(chat.otherUser?.id)
+                      {typingChats[chat.id] && !chat.isGroup && isOnline(chat.otherUser?.id)
                         ? <span className="text-green-400">escribiendo...</span>
                         : chat.lastMessage
-                          ? (chat.lastMessage.sender_id !== chat.otherUser?.id ? 'Tú: ' : '') + chat.lastMessage.content
+                          ? <span>{previewPrefix(chat, profile?.id)}{chat.lastMessage.content}</span>
                           : 'Sin mensajes aún'}
                     </p>
                   </div>
@@ -170,6 +179,14 @@ export default function ChatsList({ onSelectChat, incomingCall }) {
       )}
     </div>
   )
+}
+
+function previewPrefix(chat, myId) {
+  if (chat.lastMessage.type === 'system') return ''
+  if (chat.lastMessage.sender_id === myId) return 'Tú: '
+  const senderName = chat.lastMessage.sender_name || chat.lastMessage.sender?.username
+  if (chat.isGroup && senderName) return `${senderName}: `
+  return ''
 }
 
 function formatTime(dateStr) {

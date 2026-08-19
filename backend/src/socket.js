@@ -96,11 +96,29 @@ export function setupSocket(server) {
       : []
     socket.emit('users:online', { userIds: visibleIds })
 
-    socket.on('chat:typing', (data) => {
+    socket.on('chat:typing', async (data) => {
       const { targetUserId, chatId } = data
-      if (!targetUserId || !chatId) return
-      if (socket.invisible.has(targetUserId)) return
-      io.to(targetUserId).emit('chat:typing', { userId: socket.user.id, chatId })
+      if (!chatId) return
+      if (targetUserId) {
+        if (socket.invisible.has(targetUserId)) return
+        io.to(targetUserId).emit('chat:typing', { userId: socket.user.id, chatId })
+        return
+      }
+      try {
+        const { data: participants } = await supabase
+          .from('chat_participants')
+          .select('user_id')
+          .eq('chat_id', chatId)
+        if (participants) {
+          for (const p of participants) {
+            if (p.user_id === socket.user.id) continue
+            if (socket.invisible.has(p.user_id)) continue
+            io.to(p.user_id).emit('chat:typing', { userId: socket.user.id, chatId })
+          }
+        }
+      } catch (err) {
+        console.error(err)
+      }
     })
 
     socket.on('signal:offer', async (data) => {

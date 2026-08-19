@@ -69,6 +69,49 @@ export async function uploadAvatar(userId, base64) {
   return publicUrl
 }
 
+export async function uploadGroupIcon(chatId, base64) {
+  const matches = base64.match(/^data:image\/(png|jpeg|gif|webp);base64,(.+)$/)
+  if (!matches) return null
+
+  const { data: files } = await supabase.storage
+    .from('avatars')
+    .list(`groups/${chatId}`)
+
+  if (files && files.length > 0) {
+    const paths = files.map(f => `groups/${chatId}/${f.name}`)
+    await supabase.storage.from('avatars').remove(paths)
+  }
+
+  const filePath = `groups/${chatId}/icon_${Date.now()}.webp`
+
+  let webpBuffer
+  try {
+    webpBuffer = await sharp(Buffer.from(matches[2], 'base64'))
+      .resize(200, 200, { fit: 'cover' })
+      .webp()
+      .toBuffer()
+  } catch (err) {
+    console.error(err)
+    return null
+  }
+
+  const { error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(filePath, webpBuffer, {
+      contentType: 'image/webp',
+      cacheControl: 'public, max-age=31536000',
+      upsert: true,
+    })
+
+  if (uploadError) return null
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('avatars')
+    .getPublicUrl(filePath)
+
+  return publicUrl
+}
+
 export async function ensureAvatarBucket() {
   const { data: buckets } = await supabase.storage.listBuckets()
   const exists = buckets?.some(b => b.name === 'avatars')

@@ -1,14 +1,16 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Phone, PhoneOff, Send, Pencil, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronDown, Crown, Phone, PhoneOff, Send, Pencil, Trash2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import Avatar from './Avatar'
+import GroupAvatar from './GroupAvatar'
+import GroupInfoModal from './GroupInfoModal'
 import { useOnlineUsers } from '../lib/OnlineUsersContext'
 import { timeAgo } from '../lib/timeAgo'
 
-export default function ChatConversation({ chat, onBack, profile, onStartCall, incomingCall, onJoinCall, onClearIncomingCall }) {
+export default function ChatConversation({ chat, onBack, profile, onStartCall, incomingCall, onJoinCall, onClearIncomingCall, onLeft }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { isOnline } = useOnlineUsers()
@@ -23,6 +25,8 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
   const [popupMsgId, setPopupMsgId] = useState(null)
   const [editingMsgId, setEditingMsgId] = useState(null)
   const [editContent, setEditContent] = useState('')
+  const [groupInfoOpen, setGroupInfoOpen] = useState(false)
+  const [expandedBlocked, setExpandedBlocked] = useState(() => new Set())
 
   const { data, isLoading } = useQuery({
     queryKey: ['messages', chat.id],
@@ -35,6 +39,11 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
   })
 
   const messages = data?.messages ?? []
+  const isGroup = chat.isGroup ?? data?.isGroup ?? false
+  const participants = data?.participants ?? []
+  const groupName = data?.name || chat.name
+  const groupIcon = data?.icon_url || chat.icon_url
+  const blockedSet = new Set(data?.blockedByMe || [])
 
   function clearUnreadForChat() {
     if (!chat?.id) return
@@ -135,11 +144,27 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
     return () => socket.off('message_deleted', handleDeleted)
   }, [chat.id, queryClient])
 
+  useEffect(() => {
+    const handleGroupUpdated = (msgData) => {
+      if (msgData.chatId === chat.id) {
+        queryClient.invalidateQueries({ queryKey: ['messages', chat.id] })
+        queryClient.invalidateQueries({ queryKey: ['chats'] })
+      }
+    }
+
+    socket.on('group_updated', handleGroupUpdated)
+    socket.on('group_created', handleGroupUpdated)
+    return () => {
+      socket.off('group_updated', handleGroupUpdated)
+      socket.off('group_created', handleGroupUpdated)
+    }
+  }, [chat.id, queryClient])
+
   const otherUserId = chat.otherUser?.id
 
   useEffect(() => {
     const handleTyping = ({ userId, chatId }) => {
-      if (chatId === chat.id && userId === otherUserId) {
+      if (chatId === chat.id && (isGroup || userId === otherUserId)) {
         setTypingUserId(userId)
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
         typingTimeoutRef.current = setTimeout(() => setTypingUserId(null), 3000)
@@ -151,7 +176,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
       socket.off('chat:typing', handleTyping)
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     }
-  }, [chat.id, otherUserId])
+  }, [chat.id, otherUserId, isGroup])
 
   useEffect(() => {
     if (!popupMsgId && !editingMsgId) return
@@ -169,12 +194,15 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
   }, [popupMsgId, editingMsgId])
 
   const emitTyping = useCallback(() => {
-    if (!otherUserId) return
     const now = Date.now()
     if (now - lastTypingEmitRef.current < 2000) return
     lastTypingEmitRef.current = now
-    socket.emit('chat:typing', { targetUserId: otherUserId, chatId: chat.id })
-  }, [otherUserId, chat.id])
+    if (isGroup) {
+      socket.emit('chat:typing', { chatId: chat.id })
+    } else if (otherUserId) {
+      socket.emit('chat:typing', { targetUserId: otherUserId, chatId: chat.id })
+    }
+  }, [isGroup, otherUserId, chat.id])
 
   const sendMutation = useMutation({
     mutationFn: async (content) => {
@@ -283,6 +311,10 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
   }
 
   const handleOpenProfile = () => {
+    if (isGroup) {
+      setGroupInfoOpen(true)
+      return
+    }
     if (chat.otherUser?.username) {
       sessionStorage.setItem('chatReturn', JSON.stringify({ activeChat: chat }))
       navigate(`/${chat.otherUser.username}`)
@@ -357,6 +389,22 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
     }
   }
 
+  const typingName = isGroup && typingUserId
+    ? participants.find(p => p.id === typingUserId)?.username
+    : null
+
+  const headerSubtitle = isGroup
+    ? typingName
+      ? <span className="text-green-400 text-xs">{typingName} está escribiendo...</span>
+      : <span className="text-zinc-500 text-xs flex items-center gap-1">{data?.isAdmin && <Crown size={12} className="text-amber-400" />}{(participants.length || chat.memberCount)} miembro{(participants.length || chat.memberCount) !== 1 ? 's' : ''}</span>
+    : typingUserId
+      ? <span className="text-green-400 text-xs">escribiendo...</span>
+      : isOnline(chat.otherUser?.id)
+        ? <span className="text-green-500 text-xs">En línea</span>
+        : chat.otherUser?.last_seen_at
+          ? <span className="text-zinc-500 text-xs">Conectado {timeAgo(chat.otherUser?.last_seen_at)}</span>
+          : null
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center gap-3 mb-4">
@@ -364,28 +412,26 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
           <ChevronLeft size={24} />
         </button>
         <div className="flex-1 min-w-0">
-          <button onClick={handleOpenProfile} className="inline-flex items-center gap-3 hover:opacity-80 transition">
-            <div className="relative">
-              <Avatar src={chat.otherUser?.avatar_url} size={36} />
-              {isOnline(chat.otherUser?.id) ? (
-                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-zinc-950" />
-              ) : chat.otherUser?.last_seen_at ? (
-                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-zinc-600 ring-2 ring-zinc-950" />
-              ) : null}
-            </div>
-            <div className="flex flex-col items-start">
-              <span className="text-zinc-100 text-sm font-medium truncate">{chat.otherUser?.username}</span>
-              {typingUserId ? (
-                <span className="text-green-400 text-xs">escribiendo...</span>
-              ) : isOnline(chat.otherUser?.id) ? (
-                <span className="text-green-500 text-xs">En línea</span>
-              ) : chat.otherUser?.last_seen_at ? (
-                <span className="text-zinc-500 text-xs">Conectado {timeAgo(chat.otherUser?.last_seen_at)}</span>
-              ) : null}
+          <button onClick={handleOpenProfile} className="inline-flex items-center gap-3 hover:opacity-80 transition max-w-full">
+            {isGroup ? (
+              <GroupAvatar iconUrl={groupIcon} size={36} />
+            ) : (
+              <div className="relative">
+                <Avatar src={chat.otherUser?.avatar_url} size={36} />
+                {isOnline(chat.otherUser?.id) ? (
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-zinc-950" />
+                ) : chat.otherUser?.last_seen_at ? (
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-zinc-600 ring-2 ring-zinc-950" />
+                ) : null}
+              </div>
+            )}
+            <div className="flex flex-col items-start min-w-0">
+              <span className="text-zinc-100 text-sm font-medium truncate">{isGroup ? (groupName || 'Grupo') : chat.otherUser?.username}</span>
+              {headerSubtitle}
             </div>
           </button>
         </div>
-        {isFriend && (
+        {isFriend && !isGroup && (
           <button
             onClick={() => onStartCall?.(chat.otherUser)}
             className="text-zinc-400 hover:text-zinc-100 transition p-2 rounded-full hover:bg-zinc-800"
@@ -396,7 +442,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
         )}
       </div>
 
-      {incomingCall && incomingCall.from.id === chat.otherUser?.id && (
+      {incomingCall && !isGroup && incomingCall.from.id === chat.otherUser?.id && (
         <div className="flex items-center gap-3 mb-3 px-4 py-3 rounded-xl bg-zinc-800/50 border border-zinc-700">
           <div className="relative">
             <Avatar src={incomingCall.from.avatar_url} size={40} />
@@ -444,8 +490,11 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
             const today = new Date()
             const isNewDay = i === 0 || new Date(messages[i - 1].created_at).toDateString() !== date.toDateString()
             const isOwn = msg.sender_id === profile.id
+            const isSystem = msg.type === 'system'
             const isCallMsg = msg.content.startsWith('Llamada perdida de ')
             const displayContent = msg.deleted ? 'Mensaje eliminado' : msg.content
+            const isBlocked = isGroup && blockedSet.has(msg.sender_id) && !isOwn
+            const blockedExpanded = expandedBlocked.has(msg.id)
 
             return (
               <div key={msg.id}>
@@ -456,7 +505,11 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
                       : date.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 )}
-                {isCallMsg ? (
+                {isSystem ? (
+                  <div className="flex justify-center">
+                    <p className="text-zinc-500 text-xs px-4 py-2 rounded-full bg-zinc-800/50">{msg.content}</p>
+                  </div>
+                ) : isCallMsg ? (
                   <div className="flex justify-center">
                     <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-800/50">
                       <Phone size={14} className="text-zinc-500" />
@@ -466,44 +519,73 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
                       </p>
                     </div>
                   </div>
-                ) : (
-                <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className={`max-w-[80%] min-w-[100px] rounded-2xl px-4 py-3 break-words${isOwn ? ' cursor-pointer' : ''} ${
-                      isOwn ? 'rounded-br-md' : 'rounded-bl-md'
-                    } ${isOwn && popupMsgId === msg.id ? 'relative' : ''}`}
-                      data-message-bubble={isOwn ? '' : undefined}
-                    style={{
-                      backgroundColor: isOwn ? 'var(--color-accent)' : '#27272a',
-                    }}
-                    onClick={() => isOwn && handleMessageTap(msg, msg.id)}
-                  >
-                    <p className={`text-sm ${msg.deleted ? 'text-zinc-400 italic' : 'text-zinc-100'}`}>{displayContent}</p>
-                    <p className="text-zinc-400 text-[10px] text-right mt-1">
-                      {date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                      {msg.edited_at && !msg.deleted && (
-                          <span className="text-zinc-400 ml-1">(editado)</span>
+                ) : isBlocked ? (
+                  <div className="flex items-end gap-2">
+                    <Avatar src={msg.sender?.avatar_url} size={24} />
+                    <div className="rounded-xl px-3 py-2 bg-zinc-800/60 border border-zinc-700/50">
+                      <button
+                        onClick={() => setExpandedBlocked(prev => {
+                          const next = new Set(prev)
+                          if (next.has(msg.id)) next.delete(msg.id)
+                          else next.add(msg.id)
+                          return next
+                        })}
+                        className="flex items-center gap-1.5 text-zinc-400 text-xs hover:text-zinc-200 transition"
+                      >
+                        <ChevronDown size={14} className={`transition ${blockedExpanded ? 'rotate-180' : ''}`} />
+                        Bloqueaste a este usuario
+                      </button>
+                      {blockedExpanded && (
+                        <p className={`text-sm mt-1 ${msg.deleted ? 'text-zinc-400 italic' : 'text-zinc-100'}`}>{displayContent}</p>
                       )}
-                    </p>
-                    {isOwn && popupMsgId === msg.id && (
-                      <div className="absolute z-10 right-0 bottom-full mb-1.5 flex flex-col bg-zinc-800 rounded-lg py-0.5 shadow-lg border border-zinc-700 whitespace-nowrap min-w-[110px]" data-popup-menu>
-                        <button
-                          onClick={() => handleStartEdit(msg)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-zinc-700 transition text-xs text-zinc-300"
-                        >
-                          <Pencil size={11} />
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => deleteMutation.mutate(msg.id)}
-                          disabled={deleteMutation.isPending}
-                          className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-red-900/40 transition text-xs text-red-400 disabled:opacity-40"
-                        >
-                          <Trash2 size={11} />
-                          Eliminar
-                        </button>
-                      </div>
+                    </div>
+                  </div>
+                ) : (
+                <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} ${isGroup ? 'items-end gap-2' : ''}`}>
+                  {isGroup && !isOwn && (
+                    <Avatar src={msg.sender?.avatar_url} size={24} className="mb-0.5" />
+                  )}
+                  <div className={`${isGroup ? 'max-w-[70%] flex flex-col' : 'max-w-[80%]'}`}>
+                    {isGroup && !isOwn && (
+                      <span className="text-[11px] text-zinc-400 mb-1 truncate">{msg.sender?.username || 'Desconocido'}</span>
                     )}
+                    <div
+                      className={`min-w-[100px] rounded-2xl px-4 py-3 break-words${isOwn ? ' cursor-pointer' : ''} ${
+                        isOwn ? 'rounded-br-md' : 'rounded-bl-md'
+                      } ${isOwn && popupMsgId === msg.id ? 'relative' : ''}`}
+                      data-message-bubble={isOwn ? '' : undefined}
+                      style={{
+                        backgroundColor: isOwn ? 'var(--color-accent)' : '#27272a',
+                      }}
+                      onClick={() => isOwn && handleMessageTap(msg, msg.id)}
+                    >
+                      <p className={`text-sm ${msg.deleted ? 'text-zinc-400 italic' : 'text-zinc-100'}`}>{displayContent}</p>
+                      <p className="text-zinc-400 text-[10px] text-right mt-1">
+                        {date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                        {msg.edited_at && !msg.deleted && (
+                          <span className="text-zinc-400 ml-1">(editado)</span>
+                        )}
+                      </p>
+                      {isOwn && popupMsgId === msg.id && (
+                        <div className="absolute z-10 right-0 bottom-full mb-1.5 flex flex-col bg-zinc-800 rounded-lg py-0.5 shadow-lg border border-zinc-700 whitespace-nowrap min-w-[110px]" data-popup-menu>
+                          <button
+                            onClick={() => handleStartEdit(msg)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-zinc-700 transition text-xs text-zinc-300"
+                          >
+                            <Pencil size={11} />
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => deleteMutation.mutate(msg.id)}
+                            disabled={deleteMutation.isPending}
+                            className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-red-900/40 transition text-xs text-red-400 disabled:opacity-40"
+                          >
+                            <Trash2 size={11} />
+                            Eliminar
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 )}
@@ -552,7 +634,7 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
         </div>
       )}
 
-      {!isFriend ? (
+      {!isGroup && !isFriend ? (
         <div className="flex flex-col items-center gap-2 py-4 px-4">
           <p className="text-zinc-400 text-sm text-center">
             No podés enviar mensajes a menos que sean amigos.
@@ -595,6 +677,16 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
             <Send size={18} />
           </button>
         </div>
+      )}
+
+      {groupInfoOpen && (
+        <GroupInfoModal
+          chat={chat}
+          info={{ isAdmin: data?.isAdmin, name: groupName, icon_url: groupIcon, participants }}
+          profile={profile}
+          onClose={() => setGroupInfoOpen(false)}
+          onLeft={onLeft}
+        />
       )}
     </div>
   )

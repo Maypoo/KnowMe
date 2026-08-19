@@ -54,6 +54,15 @@ export const block = asyncHandler(async (req, res) => {
     ? myChats.map(c => c.chat_id).filter(id => otherChats.some(o => o.chat_id === id))
     : []
 
+  let dmChatIds = []
+  if (commonChats.length > 0) {
+    const { data: commonChatRows } = await supabase
+      .from('chats')
+      .select('id, is_group')
+      .in('id', commonChats)
+    dmChatIds = (commonChatRows || []).filter(c => !c.is_group).map(c => c.id)
+  }
+
   await Promise.all([
     supabase.from('friend_requests').delete().or(`and(sender_id.eq.${me},receiver_id.eq.${other}),and(sender_id.eq.${other},receiver_id.eq.${me})`),
     supabase.from('followers').delete().eq('follower_id', me).eq('following_id', other),
@@ -65,8 +74,8 @@ export const block = asyncHandler(async (req, res) => {
     otherPosts && otherPosts.length > 0
       ? supabase.from('post_likes').delete().eq('user_id', me).in('post_id', otherPosts.map(p => p.id))
       : Promise.resolve(),
-    commonChats.length > 0
-      ? supabase.from('chats').delete().in('id', commonChats)
+    dmChatIds.length > 0
+      ? supabase.from('chats').delete().in('id', dmChatIds)
       : Promise.resolve(),
   ])
 
