@@ -100,7 +100,7 @@ export default function DatePicker({ value, onChange }) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-left text-zinc-100 outline-none focus:border-zinc-600 transition flex items-center justify-between"
+        className="w-full bg-zinc-800/80 border border-white/[0.06] rounded-xl px-3.5 py-2.5 text-sm text-left text-zinc-100 outline-none focus:border-[var(--color-accent)]/30 transition-colors flex items-center justify-between tracking-[-0.011em]"
       >
         <span className={displayText ? '' : 'text-zinc-500'}>
           {displayText || 'Seleccionar fecha'}
@@ -109,7 +109,7 @@ export default function DatePicker({ value, onChange }) {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-zinc-800 rounded-xl p-3 z-50 shadow-xl">
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-zinc-900/90 backdrop-blur-[20px] border border-white/[0.08] rounded-[1.25rem] p-3 z-50 shadow-[0_16px_40px_rgba(0,0,0,0.5)]">
           {view === 'days' && (
             <>
               <div className="flex items-center justify-between mb-3">

@@ -1,7 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Search, User, Home as HomeIcon, Users, Send, Bell, Plus, Phone } from 'lucide-react'
+import { spring } from '../lib/motion'
 import Avatar from './Avatar'
-import Logo from './Logo'
+
+const navItems = (p) => [
+  { key: 'home', label: 'Inicio', icon: HomeIcon, action: p.setHome },
+  { key: 'search', label: 'Buscar', icon: Search, action: p.setSearch },
+  { key: 'friends', label: 'Amigos', icon: Users, action: p.setFriends, badge: p.pendingRequestsCount },
+  { key: 'plus', label: 'Crear', icon: Plus, action: p.setPlus },
+  { key: 'notifications', label: 'Notificaciones', icon: Bell, action: p.setNotifications, badge: p.notificationsCount },
+  { key: 'chats', label: 'Chats', icon: Send, action: p.setChats, incoming: p.incomingCall && !p.incomingCallSeen, badge: p.unreadTotal },
+  { key: 'profile', label: 'Perfil', icon: User, action: p.setProfile },
+]
 
 export default function Sidebar({
   profile, view, setView, navigate,
@@ -25,185 +36,101 @@ export default function Sidebar({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const actions = {
+    setHome: () => setView('home'),
+    setSearch: () => { setView('search'); setSearchQuery(''); setSearchResults([]); setSearched(false) },
+    setFriends: () => { setView('friends'); setTab('friends') },
+    setPlus: () => setView('plus'),
+    setNotifications: () => setView('notifications'),
+    setChats: () => { setView('chats'); setActiveChat(null); setChatsView('list') },
+    setProfile: () => navigate('/' + profile.username),
+  }
+
   return (
-    <div className="hidden lg:flex lg:absolute lg:left-0 lg:top-0 lg:bottom-0 lg:w-64 lg:flex-col lg:bg-zinc-900 lg:p-6 lg:z-40 lg:border-r lg:border-zinc-800">
-      <div className="flex items-center gap-3 px-3 mb-8">
-        <Logo size={30} />
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">KnowMe</h1>
-      </div>
-      <nav className="flex flex-col gap-1 flex-1">
-        <button
-          onClick={() => setView('home')}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition ${
-            view === 'home'
-              ? 'bg-zinc-800 text-zinc-100'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50'
-          }`}
-        >
-          <HomeIcon size={22} />
-          <span className="text-sm font-medium">Inicio</span>
-        </button>
-        <button
-          onClick={() => { setView('search'); setSearchQuery(''); setSearchResults([]); setSearched(false) }}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition ${
-            view === 'search'
-              ? 'bg-zinc-800 text-zinc-100'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50'
-          }`}
-        >
-          <Search size={22} />
-          <span className="text-sm font-medium">Buscar</span>
-        </button>
-        <button
-          onClick={() => { setView('friends'); setTab('friends') }}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition relative ${
-            view === 'friends'
-              ? 'bg-zinc-800 text-zinc-100'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50'
-          }`}
-        >
-          <Users size={22} />
-          <span className="text-sm font-medium">Amigos</span>
-          {pendingRequestsCount > 0 && (
-            <span
-              className="ml-auto rounded-full text-[11px] font-medium flex items-center justify-center"
-              style={{
-                backgroundColor: 'var(--color-accent)',
-                color: '#fff',
-                minWidth: 18,
-                height: 18,
-                padding: '0 5px',
-              }}
-            >
-              {pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setView('plus')}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition ${
-            view === 'plus'
-              ? 'bg-zinc-800 text-zinc-100'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50'
-          }`}
-        >
-          <Plus size={22} />
-          <span className="text-sm font-medium">Crear</span>
-        </button>
-        <button
-          onClick={() => setView('notifications')}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition relative ${
-            view === 'notifications'
-              ? 'bg-zinc-800 text-zinc-100'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50'
-          }`}
-        >
-          <Bell size={22} />
-          <span className="text-sm font-medium">Notificaciones</span>
-          {notificationsCount > 0 && (
-            <span
-              className="ml-auto rounded-full text-[11px] font-medium flex items-center justify-center"
-              style={{
-                backgroundColor: 'var(--color-accent)',
-                color: '#fff',
-                minWidth: 18,
-                height: 18,
-                padding: '0 5px',
-              }}
-            >
-              {notificationsCount > 99 ? '99+' : notificationsCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => { setView('chats'); setActiveChat(null); setChatsView('list') }}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition relative ${
-            view === 'chats'
-              ? 'bg-zinc-800 text-zinc-100'
-              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50'
-          } ${incomingCall && !incomingCallSeen ? 'animate-pulse bg-green-900/30' : ''}`}
-          style={incomingCall && !incomingCallSeen ? { color: '#22c55e' } : undefined}
-        >
-          <Send size={22} />
-          <span className="text-sm font-medium">Chats</span>
-          {incomingCall && !incomingCallSeen ? (
-            <span
-              className="ml-auto rounded-full flex items-center justify-center animate-pulse"
-              style={{
-                backgroundColor: '#22c55e',
-                color: '#fff',
-                width: 18,
-                height: 18,
-              }}
-            >
-              <Phone size={11} strokeWidth={3} />
-            </span>
-          ) : unreadTotal > 0 ? (
-            <span
-              className="ml-auto rounded-full text-[11px] font-medium flex items-center justify-center"
-              style={{
-                backgroundColor: 'var(--color-accent)',
-                color: '#fff',
-                minWidth: 18,
-                height: 18,
-                padding: '0 5px',
-              }}
-            >
-              {unreadTotal > 99 ? '99+' : unreadTotal}
-            </span>
-          ) : null}
-        </button>
-        <button
-          onClick={() => navigate('/' + profile.username)}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50"
-        >
-          <User size={22} />
-          <span className="text-sm font-medium">Perfil</span>
-        </button>
-      </nav>
-      <div className="pt-4 border-t border-zinc-800 relative" ref={sidebarDropdownRef}>
-        <button
-          onClick={() => setSidebarDropdownOpen(!sidebarDropdownOpen)}
-          className="flex items-center gap-3 px-3 py-2 w-full rounded-lg hover:bg-zinc-800/50 transition"
-        >
-          <Avatar src={profile.avatar_url} size={36} />
-          <span className="text-sm text-zinc-300 truncate">{profile.username}</span>
-        </button>
-        {sidebarDropdownOpen && (
-          <div className="absolute bottom-full left-0 mb-2 w-48 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1 z-50">
-            <button
-              onClick={() => { navigate('/' + profile.username); setSidebarDropdownOpen(false) }}
-              className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
-            >
-              Ir al perfil
-            </button>
-            <button
-              onClick={() => { navigate('/profile/edit'); setSidebarDropdownOpen(false) }}
-              className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
-            >
-              Editar perfil
-            </button>
-            <button
-              onClick={() => { setPreferencesOpen(true); setSidebarDropdownOpen(false) }}
-              className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
-            >
-              Preferencias
-            </button>
-            <button
-              onClick={() => { setBlockedOpen(true); setSidebarDropdownOpen(false) }}
-              className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
-            >
-              Bloqueados
-            </button>
-            <div className="border-t border-zinc-800 my-1" />
-            <button
-              onClick={() => { handleLogout(); setSidebarDropdownOpen(false) }}
-              className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-zinc-800 transition"
-            >
-              Cerrar sesión
-            </button>
-          </div>
-        )}
+    <div className="hidden lg:flex lg:absolute lg:left-4 lg:top-4 lg:bottom-4 lg:w-[280px] lg:flex-col lg:z-40">
+      <div className="flex flex-col flex-1 bg-transparent p-5 overflow-hidden">
+        <div className="flex-1 flex flex-col justify-center">
+          <nav className="flex flex-col gap-1">
+          {navItems({ ...actions, pendingRequestsCount, notificationsCount, unreadTotal, incomingCall, incomingCallSeen }).map(item => {
+            const active = view === item.key || (item.key === 'profile' ? false : false)
+            const isActive = view === item.key
+            const Icon = item.icon
+            const showPulse = item.incoming
+            return (
+              <motion.button
+                key={item.key}
+                onClick={item.action}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.12 }}
+                className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium tap-highlight will-change-transform ${
+                  isActive
+                    ? 'text-zinc-100'
+                    : showPulse
+                      ? 'text-green-400'
+                      : 'text-zinc-400 hover:text-zinc-100'
+                }`}
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebar-active"
+                    transition={spring.snappy}
+                    className="absolute inset-0 rounded-xl bg-white/[0.08] border border-white/[0.06] shadow-sm"
+                  />
+                )}
+                {showPulse && !isActive && (
+                  <span className="absolute inset-0 rounded-xl bg-green-500/10 border border-green-500/20" />
+                )}
+                <span className="relative flex items-center gap-3">
+                  <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                  <span className="tracking-[-0.011em]">{item.label}</span>
+                </span>
+                {item.badge > 0 && !showPulse && (
+                  <span
+                    className="relative ml-auto rounded-full text-[11px] font-semibold flex items-center justify-center min-w-[18px] h-[18px] px-[5px] bg-[var(--color-accent)] text-white shadow-sm"
+                  >
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                )}
+                {showPulse && (
+                  <span className="relative ml-auto rounded-full flex items-center justify-center w-[18px] h-[18px] bg-green-500 text-white">
+                    <Phone size={11} strokeWidth={3} />
+                  </span>
+                )}
+              </motion.button>
+            )
+            })}
+          </nav>
+        </div>
+        <div className="pt-4 relative shrink-0" ref={sidebarDropdownRef}>
+          <motion.button
+            onClick={() => setSidebarDropdownOpen(!sidebarDropdownOpen)}
+            whileTap={{ scale: 0.98 }}
+            className="flex items-center gap-3 px-2 py-2 w-full rounded-xl hover:bg-white/[0.06] transition-colors tap-highlight"
+          >
+            <Avatar src={profile.avatar_url} size={36} />
+            <span className="text-sm text-zinc-200 truncate tracking-[-0.011em] font-medium">{profile.username}</span>
+          </motion.button>
+          <AnimatePresence>
+            {sidebarDropdownOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 6 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 6 }}
+                transition={spring.snappy}
+                className="absolute bottom-full left-0 mb-2 w-48 material-regular rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.5)] py-1.5 z-50 overflow-hidden will-change-transform"
+                style={{ transformOrigin: 'bottom left' }}
+              >
+                <button onClick={() => { navigate('/' + profile.username); setSidebarDropdownOpen(false) }} className="w-full text-left px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/[0.06] transition-colors">Ir al perfil</button>
+                <button onClick={() => { navigate('/profile/edit'); setSidebarDropdownOpen(false) }} className="w-full text-left px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/[0.06] transition-colors">Editar perfil</button>
+                <button onClick={() => { setPreferencesOpen(true); setSidebarDropdownOpen(false) }} className="w-full text-left px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/[0.06] transition-colors">Preferencias</button>
+                <button onClick={() => { setBlockedOpen(true); setSidebarDropdownOpen(false) }} className="w-full text-left px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/[0.06] transition-colors">Bloqueados</button>
+                <div className="border-t border-white/[0.06] my-1" />
+                <button onClick={() => { handleLogout(); setSidebarDropdownOpen(false) }} className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-white/[0.06] transition-colors">Cerrar sesión</button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   )

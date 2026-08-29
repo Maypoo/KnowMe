@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Ban, Heart, MoreVertical, Send, User, X } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import NumberFlow from '@number-flow/react'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
+import { spring } from '../lib/motion'
 import { useOnlineUsers } from '../lib/OnlineUsersContext'
 import { useTitleBar } from '../lib/TitleBarContext'
 import { timeAgo } from '../lib/timeAgo'
@@ -39,13 +41,13 @@ export default function PublicProfile() {
   const { setTitle } = useTitleBar()
   const isOwnProfile = !!currentUser && currentUser.username?.toLowerCase() === username.toLowerCase()
   const editProfileButton = (
-    <button
+    <motion.button
+      whileTap={{ scale: 0.97 }}
       onClick={() => navigate('/profile/edit')}
-      className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
-      style={{ backgroundColor: 'var(--color-accent)' }}
+      className="rounded-xl px-5 py-2 text-sm font-semibold text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] transition-colors shadow-sm tap-highlight"
     >
       Editar perfil
-    </button>
+    </motion.button>
   )
 
   const goBack = () => {
@@ -368,14 +370,10 @@ export default function PublicProfile() {
     return (
       <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold text-zinc-100 mb-2">{error}</h1>
-          <button
-            onClick={goBack}
-            className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
-            title="Volver al inicio"
-          >
+          <h1 className="text-2xl font-semibold tracking-[-0.022em] text-zinc-100 mb-2">{error}</h1>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={goBack} className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors tap-highlight" title="Volver al inicio">
             <ArrowLeft size={20} />
-          </button>
+          </motion.button>
         </div>
       </div>
     )
@@ -385,33 +383,25 @@ export default function PublicProfile() {
     return (
       <div className="min-h-full bg-zinc-950 text-zinc-100">
         <div className="max-w-lg mx-auto px-4 py-8 flex flex-col items-center">
-          <button
-            onClick={goBack}
-            className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition mb-12 self-start"
-            title="Volver"
-          >
+          <motion.button whileTap={{ scale: 0.97 }} onClick={goBack} className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors tap-highlight mb-12 self-start" title="Volver">
             <ArrowLeft size={20} />
-          </button>
+          </motion.button>
           <div className="flex flex-col items-center gap-4 mt-6">
-            <div className="rounded-full p-5 bg-zinc-900">
+            <div className="rounded-full p-5 bg-zinc-900/80 border border-white/[0.06]">
               <Ban size={40} className="text-zinc-500" />
             </div>
-            <h1 className="text-xl font-semibold text-center">
+            <h1 className="text-xl font-semibold tracking-[-0.02em] text-center">
               {blocked.blockedByMe ? 'Bloqueaste a este usuario' : 'Este usuario te bloqueó'}
             </h1>
-            <p className="text-zinc-500 text-sm text-center max-w-xs">
+            <p className="text-zinc-500 text-sm text-center max-w-xs tracking-[-0.011em]">
               {blocked.blockedByMe
                 ? 'No vas a ver su información ni él la tuya. Podés desbloquearlo cuando quieras.'
                 : 'No vas a poder ver su información ni él la tuya.'}
             </p>
             {blocked.blockedByMe && (
-              <button
-                onClick={handleUnblock}
-                disabled={blocking}
-                className="mt-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
-              >
+              <motion.button whileTap={{ scale: 0.97 }} onClick={handleUnblock} disabled={blocking} className="mt-4 bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-5 py-2 text-sm font-medium transition-colors disabled:opacity-50 tap-highlight">
                 {blocking ? 'Desbloqueando...' : 'Desbloquear'}
-              </button>
+              </motion.button>
             )}
           </div>
         </div>
@@ -425,56 +415,44 @@ export default function PublicProfile() {
     <div className="min-h-full bg-zinc-950 text-zinc-100">
       <div className="max-w-lg mx-auto px-4 py-8 lg:max-w-4xl lg:py-12">
         <div className="flex items-center justify-between mb-8">
-          <button
-            onClick={goBack}
-            className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
-            title="Volver"
-          >
+          <motion.button whileTap={{ scale: 0.97 }} onClick={goBack} className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors tap-highlight" title="Volver">
             <ArrowLeft size={20} />
-          </button>
+          </motion.button>
           {!isOwnProfile && (
             <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setMenuOpen(prev => !prev)}
-                className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition"
-                title="Más opciones"
-              >
+              <motion.button whileTap={{ scale: 0.97 }} onClick={() => setMenuOpen(prev => !prev)} className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors tap-highlight" title="Más opciones">
                 <MoreVertical size={20} />
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 w-44 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1 z-50">
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false)
-                      setConfirmBlock(true)
-                    }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-zinc-800 transition"
-                  >
-                    <Ban size={14} className="inline mr-2 -mt-0.5" />
-                    Bloquear usuario
-                  </button>
-                </div>
-              )}
+              </motion.button>
+              <AnimatePresence>
+                {menuOpen && (
+                  <motion.div initial={{ opacity: 0, scale: 0.96, y: 4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 4 }} transition={spring.snappy} className="absolute right-0 top-full mt-1 w-44 material-regular rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.5)] py-1.5 z-50 overflow-hidden will-change-transform" style={{ transformOrigin: 'top right' }}>
+                    <button onClick={() => { setMenuOpen(false); setConfirmBlock(true) }} className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-white/[0.06] transition-colors">
+                      <Ban size={14} className="inline mr-2 -mt-0.5" />
+                      Bloquear usuario
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
         </div>
         <div className="flex flex-col items-center gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:gap-12">
-          <button onClick={() => setShowAvatar(true)} className="transition active:scale-95 lg:hidden">
-            <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-zinc-800 cursor-pointer" />
-          </button>
-          <button onClick={() => setShowAvatar(true)} className="hidden lg:block transition active:scale-95 lg:shrink-0 lg:self-start">
-            <Avatar src={profile.avatar_url} size={144} className="ring-4 ring-zinc-800 cursor-pointer" />
-          </button>
+          <motion.button whileTap={{ scale: 0.98 }} onClick={() => setShowAvatar(true)} className="transition tap-highlight lg:hidden">
+            <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-white/[0.06] cursor-pointer" />
+          </motion.button>
+          <motion.button whileTap={{ scale: 0.98 }} onClick={() => setShowAvatar(true)} className="hidden lg:block transition tap-highlight lg:shrink-0 lg:self-start">
+            <Avatar src={profile.avatar_url} size={144} className="ring-4 ring-white/[0.06] cursor-pointer" />
+          </motion.button>
 
           <div className="text-center lg:text-left lg:flex-1 lg:min-w-0">
-            <h1 className="text-xl font-semibold inline-flex items-center gap-2 lg:text-2xl">
+            <h1 className="text-xl font-semibold tracking-[-0.02em] inline-flex items-center gap-2 lg:text-2xl">
               {profile.username}
               {profile.friend_request_status === 'accepted' && (
                 <span className={`w-2 h-2 rounded-full inline-block ${isOnline(profile.id) ? 'bg-green-500' : 'bg-zinc-600'}`} />
               )}
             </h1>
             {profile.bio && (
-              <p className="text-zinc-400 text-sm text-center max-w-sm mt-2 whitespace-pre-wrap lg:text-left lg:max-w-none">{profile.bio}</p>
+              <p className="text-zinc-400 text-sm text-center max-w-sm mt-2 whitespace-pre-wrap lg:text-left lg:max-w-none tracking-[-0.011em]">{profile.bio}</p>
             )}
             {profile.show_country && profile.country ? (
               (() => {
@@ -490,12 +468,12 @@ export default function PublicProfile() {
                     })()
                   : null
                 return age ? (
-                  <p className="text-zinc-400 text-sm mt-2">
+                  <p className="text-zinc-400 text-sm mt-2 tracking-[-0.011em]">
                     {age} años  <span className="text-zinc-600 mx-1.5">·</span>  <img src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`} alt="" className="w-4 h-auto inline-block rounded-sm mr-1.5 -mt-0.5" />
                     {c?.name || profile.country}
                   </p>
                 ) : (
-                  <p className="text-zinc-400 text-sm mt-2 text-center lg:text-left">
+                  <p className="text-zinc-400 text-sm mt-2 text-center lg:text-left tracking-[-0.011em]">
                     <img src={`https://flagcdn.com/w20/${profile.country.toLowerCase()}.png`} alt="" className="w-4 h-auto inline-block rounded-sm mr-1.5 -mt-0.5" />
                     {c?.name || profile.country}
                   </p>
@@ -503,7 +481,7 @@ export default function PublicProfile() {
               })()
             ) : (
               profile.show_age && profile.birth_date && (
-                <p className="text-zinc-400 text-sm mt-2">{(() => {
+                <p className="text-zinc-400 text-sm mt-2 tracking-[-0.011em]">{(() => {
                   const [y, m, d] = profile.birth_date.split('-').map(Number)
                   const today = new Date()
                   let a = today.getFullYear() - y
@@ -514,52 +492,36 @@ export default function PublicProfile() {
               )
             )}
             {profile.created_at && (
-              <p className="text-zinc-600 text-xs mt-2">
+              <p className="text-zinc-600 text-xs mt-2 tracking-[-0.011em]">
                 Miembro desde el {new Date(profile.created_at).getDate()} de {MONTHS[new Date(profile.created_at).getMonth()]} del {new Date(profile.created_at).getFullYear()}
               </p>
             )}
             <div className="flex items-center justify-center gap-4 mt-3 text-sm lg:justify-start lg:hidden">
-              <button
-                onClick={() => setShowFollowers(true)}
-                className="text-zinc-400 hover:text-zinc-200 transition"
-              >
-                <strong className="font-bold">{profile.follower_count}</strong> seguidores
+              <button onClick={() => setShowFollowers(true)} className="text-zinc-400 hover:text-zinc-200 transition-colors tap-highlight">
+                <strong className="font-bold tracking-[-0.011em]">{profile.follower_count}</strong> seguidores
               </button>
               <span className="text-zinc-600">·</span>
-              <button
-                onClick={() => setShowFriends(true)}
-                className="text-zinc-400 hover:text-zinc-200 transition"
-              >
-                <strong className="font-bold">{profile.friend_count}</strong> amigos
+              <button onClick={() => setShowFriends(true)} className="text-zinc-400 hover:text-zinc-200 transition-colors tap-highlight">
+                <strong className="font-bold tracking-[-0.011em]">{profile.friend_count}</strong> amigos
               </button>
             </div>
           </div>
 
           <div className="hidden lg:flex lg:flex-col lg:items-stretch lg:shrink-0 lg:gap-4">
             <div className="flex items-center justify-center gap-4 text-sm">
-              <button
-                onClick={() => setShowFollowers(true)}
-                className="text-zinc-400 hover:text-zinc-200 transition"
-              >
-                <strong className="font-bold">{profile.follower_count}</strong> seguidores
+              <button onClick={() => setShowFollowers(true)} className="text-zinc-400 hover:text-zinc-200 transition-colors tap-highlight">
+                <strong className="font-bold tracking-[-0.011em]">{profile.follower_count}</strong> seguidores
               </button>
               <span className="text-zinc-600">·</span>
-              <button
-                onClick={() => setShowFriends(true)}
-                className="text-zinc-400 hover:text-zinc-200 transition"
-              >
-                <strong className="font-bold">{profile.friend_count}</strong> amigos
+              <button onClick={() => setShowFriends(true)} className="text-zinc-400 hover:text-zinc-200 transition-colors tap-highlight">
+                <strong className="font-bold tracking-[-0.011em]">{profile.friend_count}</strong> amigos
               </button>
             </div>
             {profile.friend_request_status === 'accepted' && (
-              <button
-                onClick={handleSendMessage}
-                className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
-                style={{ backgroundColor: 'var(--color-accent)' }}
-              >
+              <motion.button whileTap={{ scale: 0.97 }} onClick={handleSendMessage} className="rounded-xl px-5 py-2 text-sm font-semibold text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] transition-colors shadow-sm tap-highlight">
                 <Send size={16} className="inline-block mr-1.5" />
                 Enviar mensaje
-              </button>
+              </motion.button>
             )}
             {isOwnProfile && editProfileButton}
           </div>
@@ -576,59 +538,40 @@ export default function PublicProfile() {
               <>
                 <div className="flex gap-3">
                   {profile.is_following ? (
-                    <button
-                      onClick={handleUnfollow}
-                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition"
-                    >
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={handleUnfollow} className="bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-5 py-2 text-sm font-medium transition-colors tap-highlight">
                       Dejar de seguir
-                    </button>
+                    </motion.button>
                   ) : (
-                    <button
-                      onClick={handleFollow}
-                      className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90"
-                      style={{ backgroundColor: 'var(--color-accent)' }}
-                    >
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={handleFollow} className="rounded-xl px-5 py-2 text-sm font-semibold text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] transition-colors shadow-sm tap-highlight">
                       {profile.is_followed_by ? 'Seguir también' : 'Seguir'}
-                    </button>
+                    </motion.button>
                   )}
                   {!profile.friend_request_status && (
-                    <button
-                      onClick={handleSendRequest}
-                      disabled={requestLoading}
-                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
-                    >
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={handleSendRequest} disabled={requestLoading} className="bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-5 py-2 text-sm font-medium transition-colors disabled:opacity-50 tap-highlight">
                       Enviar solicitud
-                    </button>
+                    </motion.button>
                   )}
                   {profile.friend_request_status === 'pending' && (
-                    <span className="bg-zinc-800 text-zinc-500 rounded-lg px-5 py-2 text-sm">
+                    <span className="bg-white/[0.06] text-zinc-500 rounded-xl px-5 py-2 text-sm font-medium">
                       Solicitud enviada
                     </span>
                   )}
                   {profile.friend_request_status === 'accepted' && (
-                    <span className="bg-zinc-800 text-zinc-500 rounded-lg px-5 py-2 text-sm">
+                    <span className="bg-white/[0.06] text-zinc-500 rounded-xl px-5 py-2 text-sm font-medium">
                       Amigos
                     </span>
                   )}
                   {profile.friend_request_status === 'rejected' && (
-                    <button
-                      onClick={handleSendRequest}
-                      disabled={requestLoading}
-                      className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-5 py-2 text-sm transition disabled:opacity-50"
-                    >
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={handleSendRequest} disabled={requestLoading} className="bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-5 py-2 text-sm font-medium transition-colors disabled:opacity-50 tap-highlight">
                       Enviar solicitud
-                    </button>
+                    </motion.button>
                   )}
                 </div>
                 {profile.friend_request_status === 'accepted' && (
-                  <button
-                    onClick={handleSendMessage}
-                    className="rounded-lg px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 lg:hidden"
-                    style={{ backgroundColor: 'var(--color-accent)' }}
-                  >
+                  <motion.button whileTap={{ scale: 0.97 }} onClick={handleSendMessage} className="rounded-xl px-5 py-2 text-sm font-semibold text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] transition-colors shadow-sm tap-highlight lg:hidden">
                     <Send size={16} className="inline-block mr-1.5" />
                     Enviar mensaje
-                  </button>
+                  </motion.button>
                 )}
               </>
             )}
@@ -636,24 +579,16 @@ export default function PublicProfile() {
 
           {post && (
             <div className="w-full max-w-sm mx-auto mt-6 px-4 lg:basis-full lg:max-w-md lg:mt-2 lg:px-0">
-              <h2 className="text-center text-zinc-300 text-lg font-semibold mb-3">Publicación actual</h2>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-                <p className="text-zinc-100 text-lg leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
+              <h2 className="text-center text-zinc-300 text-[17px] font-semibold tracking-[-0.015em] mb-3">Publicación actual</h2>
+              <div className="material-regular rounded-[1.25rem] p-6 mb-6 shadow-[0_8px_24px_rgba(0,0,0,0.3)]">
+                <p className="text-zinc-100 text-lg leading-relaxed whitespace-pre-wrap break-words tracking-[-0.012em]">{post.content}</p>
               </div>
               <div className="flex items-center justify-center gap-3">
                 {!isOwnProfile ? (
-                  <button
-                    onClick={() => handlePostLike(post.id)}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl transition hover:opacity-90 active:scale-95"
-                    style={{ backgroundColor: 'var(--color-accent)' }}
-                  >
-                    <Heart
-                      size={20}
-                      strokeWidth={2.5}
-                      className={post.liked_by_me ? 'text-white fill-white' : 'text-white'}
-                    />
+                  <motion.button whileTap={{ scale: 0.96 }} onClick={() => handlePostLike(post.id)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-medium shadow-sm tap-highlight will-change-transform">
+                    <Heart size={20} strokeWidth={2.5} className={post.liked_by_me ? 'text-white fill-white' : 'text-white'} />
                     <span className="text-sm font-medium text-white">{post.likes_count}</span>
-                  </button>
+                  </motion.button>
                 ) : (
                   <div className="flex items-center gap-1.5 text-zinc-400 text-sm">
                     <Heart size={14} strokeWidth={2} className="text-red-400" fill="#f87171" />
@@ -676,12 +611,12 @@ export default function PublicProfile() {
         <FriendsListModal username={profile.username} onClose={() => setShowFriends(false)} />
       )}
       {showAvatar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={() => setShowAvatar(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-center p-4 border-b border-zinc-800 relative">
-              <h2 className="text-zinc-100 font-semibold text-lg">Foto de perfil</h2>
-              <button onClick={() => setShowAvatar(false)} className="absolute right-4 text-zinc-400 hover:text-zinc-200 transition p-1">
-                <X size={20} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[6px] px-4" onClick={() => setShowAvatar(false)}>
+          <div className="bg-zinc-900/90 backdrop-blur-[20px] border border-white/[0.08] rounded-[1.25rem] w-full max-w-sm shadow-[0_24px_64px_rgba(0,0,0,0.5)] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-center p-4 border-b border-white/[0.06] relative">
+              <h2 className="text-zinc-100 font-semibold text-[17px] tracking-[-0.015em]">Foto de perfil</h2>
+              <button onClick={() => setShowAvatar(false)} className="absolute right-3 w-8 h-8 rounded-full bg-white/[0.08] flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors">
+                <X size={16} />
               </button>
             </div>
             <div className="p-6 flex items-center justify-center">
@@ -700,31 +635,26 @@ export default function PublicProfile() {
           </div>
         </div>
       )}
-      {confirmBlock && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmBlock(false)} />
-          <div className="relative bg-zinc-900 rounded-xl px-6 py-5 w-full max-w-xs">
-            <p className="text-zinc-100 text-sm mb-4">
-              ¿Bloquear a {profile.username}? No van a poder verse la información entre ustedes.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setConfirmBlock(false)}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-4 py-2 text-sm transition"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleBlock}
-                disabled={blocking}
-                className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm transition disabled:opacity-50"
-              >
-                {blocking ? 'Bloqueando...' : 'Bloquear'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {confirmBlock && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/60 backdrop-blur-[6px]" onClick={() => setConfirmBlock(false)} />
+            <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: 8 }} transition={spring.default} className="relative bg-zinc-900/90 backdrop-blur-[20px] border border-white/[0.08] rounded-[1.25rem] px-6 py-5 w-full max-w-xs shadow-[0_24px_64px_rgba(0,0,0,0.5)] will-change-transform" style={{ transformOrigin: 'center center' }}>
+              <p className="text-zinc-100 text-sm tracking-[-0.011em] mb-4">
+                ¿Bloquear a {profile.username}? No van a poder verse la información entre ustedes.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => setConfirmBlock(false)} className="bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-4 py-2 text-sm font-medium transition-colors tap-highlight">
+                  Cancelar
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleBlock} disabled={blocking} className="bg-red-500 hover:bg-red-600 text-white rounded-xl px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 shadow-sm tap-highlight">
+                  {blocking ? 'Bloqueando...' : 'Bloquear'}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

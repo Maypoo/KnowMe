@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Phone } from 'lucide-react'
 import { api } from '../lib/api'
@@ -72,10 +73,10 @@ export default function ChatsList({ profile, onSelectChat, incomingCall }) {
   if (isLoading) {
     return (
       <div className="flex-1 flex flex-col">
-        <ul className="space-y-1">
+        <ul className="space-y-1.5">
           {[1,2,3,4,5].map(i => (
             <li key={i}>
-              <div className="w-full rounded-lg px-4 py-3 flex items-center gap-3 bg-zinc-900">
+              <div className="w-full rounded-2xl px-4 py-3 flex items-center gap-3 material-thin">
                 <SkeletonAvatar size={40} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
@@ -99,14 +100,16 @@ export default function ChatsList({ profile, onSelectChat, incomingCall }) {
           <p className="text-zinc-600 text-sm">No hay nada por aca.</p>
         </div>
       ) : (
-        <ul className="space-y-1">
+        <ul className="space-y-1.5">
           {chats.map(chat => {
             const title = chat.isGroup ? (chat.name || 'Grupo') : (chat.otherUser?.username || 'Desconocido')
             return (
               <li key={chat.id}>
-                <button
+                <motion.button
                   onClick={() => onSelectChat(chat)}
-                  className="w-full rounded-lg px-4 py-3 flex items-center gap-3 transition bg-zinc-900 hover:bg-zinc-800"
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.12 }}
+                  className="w-full rounded-2xl px-4 py-3 flex items-center gap-3 material-thin hover:bg-white/[0.06] transition-colors tap-highlight will-change-transform text-left"
                 >
                   {chat.isGroup ? (
                     <GroupAvatar iconUrl={chat.icon_url} size={40} />
@@ -171,7 +174,7 @@ export default function ChatsList({ profile, onSelectChat, incomingCall }) {
                           : 'Sin mensajes aún'}
                     </p>
                   </div>
-                </button>
+                </motion.button>
               </li>
             )
           })}

@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { api, setAuthToken } from '../lib/api'
 import Avatar from '../components/Avatar'
 import Logo from '../components/Logo'
@@ -26,7 +27,6 @@ export default function SetupUsername() {
       setUsernameError('Debe tener al menos 1 letra, solo letras, números, guión bajo y punto (de 1 a 20 caracteres, sin contar el @)')
       return
     }
-
     try {
       const res = await api(`/api/username/check?q=${encodeURIComponent(value)}`)
       const data = await res.json()
@@ -40,15 +40,9 @@ export default function SetupUsername() {
   const handleUsernameChange = (e) => {
     const value = e.target.value.replace(/[^a-zA-Z0-9_.]/g, '')
     setUsername(value)
-    setError(null)
-    setUsernameError(null)
-    setUsernameAvailable(null)
-
+    setError(null); setUsernameError(null); setUsernameAvailable(null)
     if (checkTimerRef.current) clearTimeout(checkTimerRef.current)
-
-    if (value) {
-      checkTimerRef.current = setTimeout(() => checkUsernameAvailability('@' + value), 500)
-    }
+    if (value) checkTimerRef.current = setTimeout(() => checkUsernameAvailability('@' + value), 500)
   }
 
   const compressImage = (file, maxSize = 800) => {
@@ -56,16 +50,9 @@ export default function SetupUsername() {
       const img = new Image()
       img.onload = () => {
         let w = img.width, h = img.height
-        if (w > maxSize || h > maxSize) {
-          const ratio = Math.min(maxSize / w, maxSize / h)
-          w = Math.round(w * ratio)
-          h = Math.round(h * ratio)
-        }
-        const canvas = document.createElement('canvas')
-        canvas.width = w
-        canvas.height = h
-        const ctx = canvas.getContext('2d')
-        ctx.drawImage(img, 0, 0, w, h)
+        if (w > maxSize || h > maxSize) { const ratio = Math.min(maxSize / w, maxSize / h); w = Math.round(w * ratio); h = Math.round(h * ratio) }
+        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h
+        const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h)
         resolve(canvas.toDataURL('image/jpeg', 0.85))
       }
       img.onerror = reject
@@ -74,141 +61,68 @@ export default function SetupUsername() {
   }
 
   const handleAvatarSelect = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type)) {
-      setError('Formato no soportado. Usá PNG, JPG, GIF o WebP.')
-      return
-    }
-
-    try {
-      const compressed = await compressImage(file)
-      setAvatarPreview(compressed)
-      setAvatarFile(file)
-      setError(null)
-    } catch {
-      setError('Error al procesar la imagen')
-    }
+    const file = e.target.files?.[0]; if (!file) return
+    if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type)) { setError('Formato no soportado. Usá PNG, JPG, GIF o WebP.'); return }
+    try { const compressed = await compressImage(file); setAvatarPreview(compressed); setAvatarFile(file); setError(null) } catch { setError('Error al procesar la imagen') }
   }
 
   const handleRemoveAvatar = () => {
-    setAvatarPreview(null)
-    setAvatarFile(null)
+    setAvatarPreview(null); setAvatarFile(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError(null)
-    setUsernameError(null)
-    setUsernameAvailable(null)
-
+    e.preventDefault(); setError(null); setUsernameError(null); setUsernameAvailable(null)
     const fullUsername = '@' + username
     if (fullUsername.length < 2 || fullUsername.length > 21 || !/^@(?=.*[a-zA-Z])[a-zA-Z0-9_.]+$/.test(fullUsername)) {
-      setError('Elegí un nombre de usuario válido (de 1 a 20 caracteres, al menos 1 letra, solo letras, números, guión bajo y punto)')
-      return
+      setError('Elegí un nombre de usuario válido (de 1 a 20 caracteres, al menos 1 letra, solo letras, números, guión bajo y punto)'); return
     }
-
     setLoading(true)
-
     try {
       const body = { username: fullUsername, access_token: accessToken }
       if (avatarPreview) body.avatar = avatarPreview
-
-      const res = await api('/api/auth/setup-username', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      })
-
+      const res = await api('/api/auth/setup-username', { method: 'POST', body: JSON.stringify(body) })
       const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error)
-        setLoading(false)
-        return
-      }
-
-      setAuthToken(accessToken, refreshToken)
-      navigate('/')
-    } catch (err) {
-      console.error(err)
-      setError('Error de conexión con el servidor')
-      setLoading(false)
-    }
+      if (!res.ok) { setError(data.error); setLoading(false); return }
+      setAuthToken(accessToken, refreshToken); navigate('/')
+    } catch (err) { console.error(err); setError('Error de conexión con el servidor'); setLoading(false) }
   }
 
   return (
-    <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-full bg-zinc-950 flex items-center justify-center px-4 py-10">
+      <div className="w-full max-w-sm material-regular rounded-[1.5rem] p-6 sm:p-8 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
         <div className="flex justify-center mb-6">
-          <Logo size={48} />
+          <Logo size={44} />
         </div>
-        <h1 className="text-2xl font-semibold text-zinc-100 mb-2 text-center">Elegí tu nombre de usuario</h1>
-        <p className="text-zinc-500 text-sm text-center mb-8">{email}</p>
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <h1 className="text-2xl font-semibold tracking-[-0.022em] text-zinc-100 mb-1 text-center">Elegí tu nombre de usuario</h1>
+        <p className="text-zinc-500 text-sm text-center mb-7 tracking-[-0.011em]">{email}</p>
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="flex flex-col items-center gap-3">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="relative group"
-            >
-              <Avatar src={avatarPreview} size={80} className="ring-2 ring-zinc-700 group-hover:ring-zinc-500 transition" />
+            <motion.button whileTap={{ scale: 0.97 }} type="button" onClick={() => fileInputRef.current?.click()} className="relative group tap-highlight">
+              <Avatar src={avatarPreview} size={80} className="ring-2 ring-white/[0.08] group-hover:ring-white/15 transition" />
               <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                 <span className="text-xs text-zinc-200 font-medium">{avatarPreview ? 'Cambiar' : 'Subir'}</span>
               </div>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp"
-              onChange={handleAvatarSelect}
-              className="hidden"
-            />
-            {avatarPreview && (
-              <button
-                type="button"
-                onClick={handleRemoveAvatar}
-                className="text-xs text-zinc-500 hover:text-zinc-300 transition"
-              >
-                Quitar foto
-              </button>
-            )}
-            {!avatarPreview && (
-              <p className="text-xs text-zinc-500">Foto de perfil (opcional)</p>
+            </motion.button>
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={handleAvatarSelect} className="hidden" />
+            {avatarPreview ? (
+              <button type="button" onClick={handleRemoveAvatar} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Quitar foto</button>
+            ) : (
+              <p className="text-xs text-zinc-500 tracking-[-0.011em]">Foto de perfil (opcional)</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="username" className="block text-sm text-zinc-400 mb-1">Nombre de usuario</label>
+            <label htmlFor="username" className="block text-xs font-medium text-zinc-400 mb-1.5 tracking-[-0.011em]">Nombre de usuario</label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none">@</span>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={handleUsernameChange}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition"
-                placeholder="usuario"
-                autoFocus
-                required
-              />
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none text-[15px]">@</span>
+              <input id="username" type="text" value={username} onChange={handleUsernameChange} className="w-full bg-zinc-800/80 border border-white/[0.06] rounded-xl pl-8 pr-3 py-2.5 text-zinc-100 placeholder-zinc-500 text-[15px] tracking-[-0.011em] focus:outline-none focus:border-[var(--color-accent)]/30 transition-colors" placeholder="usuario" autoFocus required />
             </div>
-            {usernameError && (
-              <p className="text-xs text-red-400 mt-2">{usernameError}</p>
-            )}
-            {usernameAvailable && (
-              <p className="text-xs text-green-400 mt-2">El usuario está disponible</p>
-            )}
+            {usernameError && <p className="text-xs text-red-400 mt-2">{usernameError}</p>}
+            {usernameAvailable && <p className="text-xs text-green-400 mt-2">El usuario está disponible</p>}
           </div>
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-zinc-100 text-zinc-950 rounded-lg py-2 font-medium hover:bg-zinc-300 transition disabled:opacity-50"
-          >
-            {loading ? 'Guardando...' : 'Continuar'}
-          </button>
+          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+          <motion.button whileTap={{ scale: 0.97 }} type="submit" disabled={loading} className="w-full bg-zinc-100 text-zinc-900 rounded-xl py-2.5 font-semibold text-sm hover:bg-zinc-200 transition-colors disabled:opacity-50 shadow-sm tap-highlight">{loading ? 'Guardando...' : 'Continuar'}</motion.button>
         </form>
       </div>
     </div>

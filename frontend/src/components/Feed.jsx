@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import { Heart, Loader2, ChevronUp, ChevronDown } from 'lucide-react'
 import { api } from '../lib/api'
+import { spring } from '../lib/motion'
 import Avatar from './Avatar'
+import SegmentedControl from './ui/SegmentedControl'
 import { SkeletonBox, SkeletonAvatar } from './Skeleton'
 
 const MODES = [
@@ -257,42 +260,19 @@ export default function Feed() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 lg:relative">
-      <div className="relative px-4 lg:absolute lg:inset-x-0 lg:top-0 lg:z-10 lg:pointer-events-none lg:px-0">
-        <div className="flex gap-1 bg-zinc-900 rounded-lg p-1 lg:w-80 lg:mx-auto lg:pointer-events-auto">
-          {MODES.map(m => {
-            const active = feedMode === m.key
-            return (
-              <button
-                key={m.key}
-                onClick={() => handleModeChange(m.key)}
-                className={`flex-1 rounded-md py-2 text-sm font-medium transition ${
-                  active
-                    ? 'bg-zinc-950 text-zinc-100'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {m.label}
-              </button>
-            )
-          })}
-        </div>
+      <div className="relative px-4 lg:absolute lg:inset-x-0 lg:top-0 lg:z-10 lg:pointer-events-none lg:px-0 xl:-translate-x-[148px]">
+        <SegmentedControl id="feed" options={MODES} value={feedMode} onChange={handleModeChange} className="lg:w-80 lg:mx-auto lg:pointer-events-auto" />
       </div>
 
       <div className="hidden lg:flex lg:flex-col lg:absolute lg:right-4 lg:top-1/2 lg:-translate-y-1/2 lg:z-10 lg:gap-2">
-        <button
-          onClick={goUp}
-          className="rounded-full p-2 bg-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition"
-        >
-          <ChevronUp size={24} />
-        </button>
-        <button
-          onClick={goDown}
-          className="rounded-full p-2 bg-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition"
-        >
-          <ChevronDown size={24} />
-        </button>
+        <motion.button whileTap={{ scale: 0.92 }} onClick={goUp} className="rounded-full p-2.5 material-regular text-zinc-400 hover:text-zinc-100 transition-colors tap-highlight">
+          <ChevronUp size={20} />
+        </motion.button>
+        <motion.button whileTap={{ scale: 0.92 }} onClick={goDown} className="rounded-full p-2.5 material-regular text-zinc-400 hover:text-zinc-100 transition-colors tap-highlight">
+          <ChevronDown size={20} />
+        </motion.button>
       </div>
-      <div ref={feedRef} className="flex-1 overflow-hidden overscroll-none relative">
+      <div ref={feedRef} className="flex-1 overflow-hidden overscroll-none relative xl:-translate-x-[148px]">
       {feedLoading ? (
         <div className="h-full flex flex-col items-center justify-center px-6 lg:px-0">
           <div className="flex items-center gap-3 lg:gap-4 mb-6 lg:mb-8">
@@ -312,27 +292,26 @@ export default function Feed() {
           </p>
         </div>
       ) : (
-        <div
+        <motion.div
           className="h-full will-change-transform"
-          style={{
-            transform: `translateY(-${feedIndex * 100}%)`,
-            transition: skipTransition ? 'none' : `transform ${TRANSITION_MS}ms ease-out`,
-          }}
+          animate={{ y: `-${feedIndex * 100}%` }}
+          transition={skipTransition ? { duration: 0 } : spring.default}
         >
           {renderPosts.map((post, i) => (
             <div key={`${post.id}-${i}`} className="h-full flex flex-col items-center justify-center px-6 lg:px-0">
-              <button onClick={() => navigate('/' + post.username)} className="flex items-center gap-3 mb-6 lg:mb-8 hover:opacity-80 transition">
+              <motion.button whileTap={{ scale: 0.97 }} onClick={() => navigate('/' + post.username)} className="flex items-center gap-3 mb-6 lg:mb-8 tap-highlight">
                 <Avatar src={post.avatar_url} size={40} />
-                <span className="text-zinc-100 font-medium text-sm lg:text-base">{post.display_name || post.username}</span>
-              </button>
-              <div className="w-full max-w-md lg:max-w-xl bg-zinc-900 lg:bg-zinc-900/90 border border-zinc-800 rounded-xl p-6 lg:p-8 mb-6 lg:mb-8 lg:shadow-xl lg:shadow-black/25 lg:backdrop-blur-sm lg:border-zinc-700/50">
-                <p className="text-zinc-100 text-lg lg:text-xl leading-relaxed lg:leading-relaxed whitespace-pre-wrap break-words lg:tracking-wide">{post.content}</p>
+                <span className="text-zinc-100 font-medium text-sm lg:text-base tracking-[-0.011em]">{post.display_name || post.username}</span>
+              </motion.button>
+              <div className="w-full max-w-md lg:max-w-xl material-regular rounded-[1.25rem] p-6 lg:p-8 mb-6 lg:mb-8 shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
+                <p className="text-zinc-100 text-lg lg:text-xl leading-relaxed whitespace-pre-wrap break-words tracking-[-0.012em]">{post.content}</p>
               </div>
               <div className="flex items-center gap-3 lg:gap-4">
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  whileHover={{ scale: 1.02 }}
                   onClick={() => handleFeedLike(post.id)}
-                  className="flex items-center gap-2 px-5 py-2.5 lg:px-6 lg:py-3 rounded-xl transition hover:opacity-90 active:scale-95"
-                  style={{ backgroundColor: 'var(--color-accent)' }}
+                  className="flex items-center gap-2 px-5 py-2.5 lg:px-6 lg:py-3 rounded-xl bg-[var(--color-accent)] text-white font-medium shadow-sm tap-highlight will-change-transform"
                 >
                   <Heart
                     size={20}
@@ -342,27 +321,26 @@ export default function Feed() {
                   <span className="text-sm lg:text-base font-medium text-white">
                     {post.likes_count}
                   </span>
-                </button>
+                </motion.button>
                 {feedMode === 'all' && (() => {
                   if (post.friend_request_status === 'pending') {
                     return (
                       <span
-                        className="rounded-xl px-4 py-2.5 lg:px-6 lg:py-3 text-sm lg:text-base text-white opacity-60"
-                        style={{ backgroundColor: 'var(--color-accent)' }}
+                        className="rounded-xl px-4 py-2.5 lg:px-6 lg:py-3 text-sm lg:text-base text-white opacity-60 bg-[var(--color-accent)]"
                       >
                         Solicitud enviada
                       </span>
                     )
                   } else {
                     return (
-                      <button
+                      <motion.button
+                        whileTap={{ scale: 0.97 }}
                         onClick={() => handleSendFriendRequest(post)}
                         disabled={sendingRequest === post.id}
-                        className="rounded-xl px-4 py-2.5 lg:px-6 lg:py-3 text-sm lg:text-base text-white transition hover:opacity-90 disabled:opacity-50"
-                        style={{ backgroundColor: 'var(--color-accent)' }}
+                        className="rounded-xl px-4 py-2.5 lg:px-6 lg:py-3 text-sm lg:text-base text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 tap-highlight shadow-sm"
                       >
                         {sendingRequest === post.id ? 'Enviando...' : 'Enviar solicitud'}
-                      </button>
+                      </motion.button>
                     )
                   }
                 })()}
@@ -388,7 +366,7 @@ export default function Feed() {
               </p>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
       </div>
     </div>

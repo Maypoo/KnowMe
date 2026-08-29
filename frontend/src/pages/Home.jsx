@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { Search, Settings2, Plus } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
 import { useTitleBar } from '../lib/TitleBarContext'
+import { spring } from '../lib/motion'
 import Avatar from '../components/Avatar'
 import Logo from '../components/Logo'
 import Sidebar from '../components/Sidebar'
 import MobileNav from '../components/MobileNav'
+import SegmentedControl from '../components/ui/SegmentedControl'
 import SearchView from '../components/SearchView'
 import CreatePostView from '../components/CreatePostView'
 import DeleteConfirmModal from '../components/DeleteConfirmModal'
@@ -657,7 +660,7 @@ export default function Home() {
           chatsView={chatsView}
         />
       ) : (
-        <div className="lg:ml-64 px-6 py-6 flex-1 flex flex-col min-h-0">
+        <div className="lg:ml-[296px] px-6 py-6 flex-1 flex flex-col min-h-0 lg:p-4">
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-2 lg:hidden">
               <Logo size={28} />
@@ -720,34 +723,13 @@ export default function Home() {
           </div>
 
           {view === 'friends' && (
-            <div className="flex gap-1 bg-zinc-900 rounded-lg p-1 mb-8 lg:max-w-xl lg:mx-auto lg:w-full">
-              {TABS.map(t => (
-                <button
-                  key={t.key}
-                  onClick={() => setTab(t.key)}
-                  className={`flex-1 rounded-md py-2 text-sm font-medium transition relative ${
-                    tab === t.key
-                      ? 'bg-zinc-950 text-zinc-100'
-                      : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {t.label}
-                  {t.key === 'requests' && pendingRequestsCount > 0 && (
-                    <span
-                      className="absolute -top-1.5 -right-1.5 rounded-full text-[11px] font-medium flex items-center justify-center"
-                      style={{
-                        backgroundColor: 'var(--color-accent)',
-                        color: '#fff',
-                        minWidth: 18,
-                        height: 18,
-                        padding: '0 5px',
-                      }}
-                    >
-                      {pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}
-                    </span>
-                  )}
-                </button>
-              ))}
+            <div className="mb-8 lg:max-w-xl lg:mx-auto lg:w-full relative xl:relative xl:left-[-148px]">
+              <SegmentedControl id="friends" options={TABS} value={tab} onChange={setTab} />
+              {pendingRequestsCount > 0 && (
+                <span className="pointer-events-none absolute -top-1.5 right-1 rounded-full text-[11px] font-semibold flex items-center justify-center min-w-[18px] h-[18px] px-[5px] bg-[var(--color-accent)] text-white shadow-sm">
+                  {pendingRequestsCount > 99 ? '99+' : pendingRequestsCount}
+                </span>
+              )}
             </div>
           )}
 
@@ -782,35 +764,35 @@ export default function Home() {
                 ) : chatsView === 'newGroup' ? (
                   <NewGroup onBack={handleBackFromNewChat} onCreateGroup={handleCreateGroup} />
                 ) : (
-                  <div className="flex-1 flex flex-col lg:flex-row min-h-0 lg:gap-4">
-                    <div className={`${activeChat ? 'hidden lg:flex' : 'flex'} flex-col lg:w-96 min-h-0 shrink-0 lg:pr-4`}>
+                  <div className="flex-1 flex flex-col lg:flex-row min-h-0 lg:gap-6">
+                    <div className={`${activeChat ? 'hidden lg:flex' : 'flex'} flex-col lg:w-[400px] xl:w-[420px] min-h-0 shrink-0 lg:pr-4`}>
                       <section className="flex-1 flex flex-col min-h-0">
                         <div className="flex items-center justify-between mb-4">
-                          <h2 className="text-zinc-100 text-lg font-semibold">Chats</h2>
+                          <h2 className="text-zinc-100 text-lg font-semibold tracking-[-0.015em]">Chats</h2>
                           <div className="relative">
-                            <button
+                            <motion.button
+                              whileTap={{ scale: 0.93 }}
                               onClick={() => setPlusMenuOpen(!plusMenuOpen)}
-                              className="rounded-full p-2 transition hover:opacity-80"
-                              style={{ backgroundColor: 'var(--color-accent)' }}
+                              className="rounded-full p-2.5 bg-[var(--color-accent)] text-white shadow-sm tap-highlight"
                             >
-                              <Plus size={20} strokeWidth={2.5} />
-                            </button>
-                            {plusMenuOpen && (
-                              <div ref={plusMenuRef} className="absolute right-0 mt-2 w-44 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1 z-50">
-                                <button
-                                  onClick={() => { setPlusMenuOpen(false); handleNewChat() }}
-                                  className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
+                              <Plus size={18} strokeWidth={2.5} />
+                            </motion.button>
+                            <AnimatePresence>
+                              {plusMenuOpen && (
+                                <motion.div
+                                  ref={plusMenuRef}
+                                  initial={{ opacity: 0, scale: 0.96, y: 4 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.96, y: 4 }}
+                                  transition={spring.snappy}
+                                  className="absolute right-0 mt-2 w-44 material-regular rounded-xl shadow-[0_16px_40px_rgba(0,0,0,0.5)] py-1.5 z-50 overflow-hidden will-change-transform"
+                                  style={{ transformOrigin: 'top right' }}
                                 >
-                                  Nuevo chat
-                                </button>
-                                <button
-                                  onClick={() => { setPlusMenuOpen(false); handleNewGroup() }}
-                                  className="w-full text-left px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition"
-                                >
-                                  Nuevo grupo
-                                </button>
-                              </div>
-                            )}
+                                  <button onClick={() => { setPlusMenuOpen(false); handleNewChat() }} className="w-full text-left px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/[0.06] transition-colors">Nuevo chat</button>
+                                  <button onClick={() => { setPlusMenuOpen(false); handleNewGroup() }} className="w-full text-left px-4 py-2.5 text-sm text-zinc-200 hover:bg-white/[0.06] transition-colors">Nuevo grupo</button>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
                         </div>
                         <ChatsList
@@ -835,7 +817,7 @@ export default function Home() {
             ) : (
               <>
                 {tab === 'add' && (
-                  <section className="flex-1 flex flex-col lg:max-w-xl lg:mx-auto lg:w-full">
+                  <section className="flex-1 flex flex-col lg:max-w-xl lg:mx-auto lg:w-full xl:relative xl:left-[-148px]">
                     <FriendSearch />
                     <div className="mt-8">
                       <PendingRequests />
@@ -844,13 +826,13 @@ export default function Home() {
                 )}
 
                 {tab === 'requests' && (
-                  <section className="flex-1 flex flex-col lg:max-w-xl lg:mx-auto lg:w-full">
+                  <section className="flex-1 flex flex-col lg:max-w-xl lg:mx-auto lg:w-full xl:relative xl:left-[-148px]">
                     <FriendRequests />
                   </section>
                 )}
 
                 {tab === 'friends' && (
-                  <section className="flex-1 flex flex-col lg:max-w-xl lg:mx-auto lg:w-full">
+                  <section className="flex-1 flex flex-col lg:max-w-xl lg:mx-auto lg:w-full xl:relative xl:left-[-148px]">
                     <FriendsList />
                   </section>
                 )}

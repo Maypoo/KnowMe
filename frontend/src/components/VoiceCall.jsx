@@ -1,8 +1,10 @@
 import { forwardRef, useImperativeHandle, useEffect, useState, useRef, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Mic, MicOff, PhoneOff } from 'lucide-react'
 import { socket } from '../lib/socket'
 import { api } from '../lib/api'
 import { createPeerConnection } from '../lib/webrtc'
+import { spring } from '../lib/motion'
 import Avatar from './Avatar'
 
 const VoiceCall = forwardRef((props, ref) => {
@@ -328,9 +330,10 @@ const VoiceCall = forwardRef((props, ref) => {
   return (
     <>
       <audio ref={remoteAudioRef} autoPlay playsInline />
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/70" />
-        <div className="relative bg-zinc-900 rounded-2xl p-8 w-80 flex flex-col items-center gap-4 shadow-2xl">
+      <AnimatePresence>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 z-50 flex items-center justify-center">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/70 backdrop-blur-[8px]" />
+          <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: 8 }} transition={spring.default} className="relative bg-zinc-900/90 backdrop-blur-[20px] border border-white/[0.08] rounded-[1.5rem] p-8 w-80 flex flex-col items-center gap-4 shadow-[0_24px_64px_rgba(0,0,0,0.5)] will-change-transform" style={{ transformOrigin: 'center center' }}>
           <Avatar src={otherUser?.avatar_url} size={80} />
 
           <p className="text-zinc-100 text-lg font-medium">{otherUser?.username}</p>
@@ -348,37 +351,18 @@ const VoiceCall = forwardRef((props, ref) => {
 
           {callState === 'waiting' && (
             <>
-              <p className="text-zinc-400 text-sm">Esperando que {(otherUser?.username || '').replace(/^@/, '').split(' ')[0] || 'el usuario'} se una...</p>
+              <p className="text-zinc-400 text-sm tracking-[-0.011em] text-center">Esperando que {(otherUser?.username || '').replace(/^@/, '').split(' ')[0] || 'el usuario'} se una...</p>
               <div className="flex items-center gap-4">
-                <button
-                  onClick={toggleMute}
-                  className={`rounded-full p-4 transition ${
-                    isMuted
-                      ? 'bg-red-600 text-white hover:bg-red-700'
-                      : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
-                  }`}
-                >
-                  {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
-                </button>
-                <button
-                  onClick={endCall}
-                  className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
-                >
-                  <PhoneOff size={24} />
-                </button>
+                <motion.button whileTap={{ scale: 0.93 }} onClick={toggleMute} className={`rounded-full p-4 shadow-sm tap-highlight transition-colors ${isMuted ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-white/[0.08] text-zinc-300 hover:bg-white/[0.12]'}`}>{isMuted ? <MicOff size={22} /> : <Mic size={22} />}</motion.button>
+                <motion.button whileTap={{ scale: 0.93 }} onClick={endCall} className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 shadow-sm tap-highlight transition-colors"><PhoneOff size={22} /></motion.button>
               </div>
             </>
           )}
 
           {callState === 'joining' && (
             <>
-              <p className="text-zinc-400 text-sm">Conectando...</p>
-              <button
-                onClick={endCall}
-                className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
-              >
-                <PhoneOff size={24} />
-              </button>
+              <p className="text-zinc-400 text-sm tracking-[-0.011em]">Conectando...</p>
+              <motion.button whileTap={{ scale: 0.93 }} onClick={endCall} className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 shadow-sm tap-highlight transition-colors"><PhoneOff size={22} /></motion.button>
             </>
           )}
 
@@ -386,33 +370,20 @@ const VoiceCall = forwardRef((props, ref) => {
             <>
               <div className="flex items-center gap-3">
                 <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
-                <p className="text-green-400 text-sm font-medium">En llamada</p>
+                <p className="text-green-400 text-sm font-medium tracking-[-0.011em]">En llamada</p>
               </div>
-              <p className="text-zinc-300 text-lg font-mono tabular-nums">{formatDuration(duration)}</p>
+              <p className="text-zinc-200 text-lg font-mono tabular-nums tracking-tight">{formatDuration(duration)}</p>
               <div className="flex items-center gap-4">
-                <button
-                  onClick={toggleMute}
-                  className={`rounded-full p-4 transition ${
-                    isMuted
-                      ? 'bg-red-600 text-white hover:bg-red-700'
-                      : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
-                  }`}
-                >
-                  {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
-                </button>
-                <button
-                  onClick={endCall}
-                  className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 transition"
-                >
-                  <PhoneOff size={24} />
-                </button>
+                <motion.button whileTap={{ scale: 0.93 }} onClick={toggleMute} className={`rounded-full p-4 shadow-sm tap-highlight transition-colors ${isMuted ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-white/[0.08] text-zinc-300 hover:bg-white/[0.12]'}`}>{isMuted ? <MicOff size={22} /> : <Mic size={22} />}</motion.button>
+                <motion.button whileTap={{ scale: 0.93 }} onClick={endCall} className="rounded-full p-4 bg-red-600 text-white hover:bg-red-700 shadow-sm tap-highlight transition-colors"><PhoneOff size={22} /></motion.button>
               </div>
             </>
           )}
 
           {callState === 'ended' && null}
-        </div>
-      </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
     </>
   )
 })

@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import { ArrowLeft, Camera } from 'lucide-react'
 import { api } from '../lib/api'
 import { startOAuth, onOAuthTokens } from '../lib/oauth'
+import { spring } from '../lib/motion'
 import Avatar from '../components/Avatar'
 import DatePicker from '../components/DatePicker'
 import CountrySelect from '../components/CountrySelect'
@@ -370,31 +372,24 @@ export default function EditProfile() {
   return (
     <div className="min-h-full bg-zinc-950 text-zinc-100">
       <div className="max-w-5xl mx-auto px-4 py-8 lg:min-h-screen lg:flex lg:flex-col">
-        <button
-          onClick={() => navigate(-1)}
-          className="rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition mb-8"
-          title="Volver"
-        >
+        <motion.button whileTap={{ scale: 0.97 }} onClick={() => navigate(-1)} className="self-start rounded-full p-2 text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors mb-8 tap-highlight" title="Volver">
           <ArrowLeft size={20} />
-        </button>
+        </motion.button>
 
-        <h1 className="text-xl font-semibold mb-8 text-center lg:hidden">Editar perfil</h1>
+        <h1 className="text-xl font-semibold tracking-[-0.015em] mb-8 text-center lg:hidden">Editar perfil</h1>
 
         <div className="grid gap-8 lg:grid-cols-2 lg:gap-12 items-start lg:items-center lg:flex-1">
           <div className="flex flex-col items-center gap-8">
             <div className="relative group">
-              <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-zinc-800" />
+              <Avatar src={profile.avatar_url} size={96} className="ring-2 ring-white/[0.06]" />
               {updatingAvatar ? (
                 <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
                   <div className="w-6 h-6 border-2 border-zinc-300 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                >
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => fileInputRef.current?.click()} className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition tap-highlight">
                   <Camera size={24} className="text-zinc-200" />
-                </button>
+                </motion.button>
               )}
               <input
                 ref={fileInputRef}
@@ -406,62 +401,46 @@ export default function EditProfile() {
             </div>
 
             <div className="w-full max-w-sm space-y-2">
-              <label className="text-sm text-zinc-500">Nombre de usuario</label>
+              <label className="text-sm text-zinc-500 tracking-[-0.011em]">Nombre de usuario</label>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none text-sm">@</span>
                   <input
                     value={usernameInput}
                     onChange={handleUsernameChange}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-600 transition"
+                    className="w-full bg-zinc-800/80 border border-white/[0.06] rounded-xl pl-8 pr-3 py-2.5 text-zinc-100 placeholder-zinc-500 text-[15px] tracking-[-0.011em] outline-none focus:border-[var(--color-accent)]/30 transition-colors"
                   />
                 </div>
-                <button
-                  onClick={handleSaveUsername}
-                  disabled={updatingUsername || !usernameInput || ('@' + usernameInput) === profile?.username || !usernameAvailable || (usernameLimits && usernameLimits.remaining === 0)}
-                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
-                >
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleSaveUsername} disabled={updatingUsername || !usernameInput || ('@' + usernameInput) === profile?.username || !usernameAvailable || (usernameLimits && usernameLimits.remaining === 0)} className="text-xs font-medium bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-3 py-2 transition-colors disabled:opacity-50 tap-highlight shadow-sm">
                   {updatingUsername ? 'Guardando...' : 'Guardar'}
-                </button>
+                </motion.button>
               </div>
-              {usernameError && (
-                <p className="text-xs text-red-400">{usernameError}</p>
-              )}
-              {usernameAvailable && (
-                <p className="text-xs text-green-400">El usuario está disponible</p>
-              )}
-              {usernameLimits && usernameLimits.remaining > 0 && (
-                <p className="text-xs text-zinc-600">Te quedan {usernameLimits.remaining} cambio{usernameLimits.remaining !== 1 ? 's' : ''} en los próximos 14 días</p>
-              )}
-              {usernameLimits && usernameLimits.remaining === 0 && usernameLimits.nextAvailable && (
-                <p className="text-xs text-amber-400">Límite alcanzado. Podrás cambiar tu nombre de usuario nuevamente a partir del {new Date(usernameLimits.nextAvailable).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-              )}
+              {usernameError && <p className="text-xs text-red-400">{usernameError}</p>}
+              {usernameAvailable && <p className="text-xs text-green-400">El usuario está disponible</p>}
+              {usernameLimits && usernameLimits.remaining > 0 && <p className="text-xs text-zinc-600">Te quedan {usernameLimits.remaining} cambio{usernameLimits.remaining !== 1 ? 's' : ''} en los próximos 14 días</p>}
+              {usernameLimits && usernameLimits.remaining === 0 && usernameLimits.nextAvailable && <p className="text-xs text-amber-400">Límite alcanzado. Podrás cambiar tu nombre de usuario nuevamente a partir del {new Date(usernameLimits.nextAvailable).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</p>}
             </div>
 
             <div className="w-full max-w-sm space-y-2">
-              <label className="text-sm text-zinc-500">Mayúsculas</label>
+              <label className="text-sm text-zinc-500 tracking-[-0.011em]">Mayúsculas</label>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none text-sm">@</span>
                   <input
                     value={displayNameInput}
                     onChange={e => setDisplayNameInput(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-sm text-zinc-100 outline-none focus:border-zinc-600 transition"
+                    className="w-full bg-zinc-800/80 border border-white/[0.06] rounded-xl pl-8 pr-3 py-2.5 text-zinc-100 placeholder-zinc-500 text-[15px] tracking-[-0.011em] outline-none focus:border-[var(--color-accent)]/30 transition-colors"
                   />
                 </div>
-                <button
-                  onClick={handleSaveDisplayName}
-                  disabled={updatingDisplayName || !hasUnsavedName}
-                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
-                >
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleSaveDisplayName} disabled={updatingDisplayName || !hasUnsavedName} className="text-xs font-medium bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-3 py-2 transition-colors disabled:opacity-50 tap-highlight shadow-sm">
                   {updatingDisplayName ? 'Guardando...' : 'Guardar'}
-                </button>
+                </motion.button>
               </div>
               <p className="text-xs text-zinc-600">Solo podés cambiar las mayúsculas</p>
             </div>
 
             <div className="w-full max-w-sm space-y-2">
-              <label className="text-sm text-zinc-500">Biografía</label>
+              <label className="text-sm text-zinc-500 tracking-[-0.011em]">Biografía</label>
               <textarea
                 value={bio}
                 onChange={e => {
@@ -473,109 +452,75 @@ export default function EditProfile() {
                 }}
                 maxLength={100}
                 rows={3}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 resize-none outline-none focus:border-zinc-600 transition"
+                className="w-full bg-zinc-800/80 border border-white/[0.06] rounded-xl px-3.5 py-2.5 text-zinc-100 placeholder-zinc-500 text-[15px] tracking-[-0.011em] resize-none outline-none focus:border-[var(--color-accent)]/30 transition-colors"
               />
               <div className="flex items-center justify-between">
                 <span className="text-xs text-zinc-600">{bio.length}/100</span>
-                <button
-                  onClick={handleSaveBio}
-                  disabled={updatingBio || !hasUnsavedBio}
-                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-1.5 transition disabled:opacity-50"
-                >
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleSaveBio} disabled={updatingBio || !hasUnsavedBio} className="text-xs font-medium bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-3 py-1.5 transition-colors disabled:opacity-50 tap-highlight shadow-sm">
                   {updatingBio ? 'Guardando...' : 'Guardar'}
-                </button>
+                </motion.button>
               </div>
             </div>
           </div>
 
           <div className="flex flex-col items-center gap-8">
             <div className="w-full max-w-sm space-y-2">
-              <label className="text-sm text-zinc-500">Correo electrónico</label>
+              <label className="text-sm text-zinc-500 tracking-[-0.011em]">Correo electrónico</label>
               <input
                 value={profile.email}
                 readOnly
-                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-400 outline-none cursor-not-allowed"
+                className="w-full bg-zinc-800/50 border border-white/[0.06] rounded-xl px-3.5 py-2.5 text-sm text-zinc-400 outline-none cursor-not-allowed"
               />
               <p className="text-xs text-zinc-600">Correo verificado por Google</p>
             </div>
 
             <div className="w-full max-w-sm space-y-2">
-              <label className="text-sm text-zinc-500">Fecha de nacimiento</label>
+              <label className="text-sm text-zinc-500 tracking-[-0.011em]">Fecha de nacimiento</label>
               <div className="flex items-center gap-2">
                 <div className="flex-1">
                   <DatePicker value={birthDate} onChange={setBirthDate} />
                 </div>
-                <button
-                  onClick={handleSaveBirth}
-                  disabled={updatingBirth || (!hasBirthDateChanged && !hasShowAgeChanged)}
-                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
-                >
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleSaveBirth} disabled={updatingBirth || (!hasBirthDateChanged && !hasShowAgeChanged)} className="text-xs font-medium bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-3 py-2 transition-colors disabled:opacity-50 tap-highlight shadow-sm">
                   {updatingBirth ? 'Guardando...' : 'Guardar'}
-                </button>
+                </motion.button>
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showAge}
-                  onChange={e => setShowAge(e.target.checked)}
-                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
-                />
-                <span className="text-sm text-zinc-400">Mostrar edad en el perfil</span>
+                <input type="checkbox" checked={showAge} onChange={e => setShowAge(e.target.checked)} className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]" />
+                <span className="text-sm text-zinc-400 tracking-[-0.011em]">Mostrar edad en el perfil</span>
               </label>
             </div>
 
             <div className="w-full max-w-sm space-y-2">
-              <label className="text-sm text-zinc-500">País</label>
+              <label className="text-sm text-zinc-500 tracking-[-0.011em]">País</label>
               <div className="flex items-center gap-2">
                 <div className="flex-1">
                   <CountrySelect value={country} onChange={setCountry} />
                 </div>
-                <button
-                  onClick={handleSaveCountry}
-                  disabled={updatingCountry || (!hasCountryChanged && !hasShowCountryChanged)}
-                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-2 transition disabled:opacity-50"
-                >
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleSaveCountry} disabled={updatingCountry || (!hasCountryChanged && !hasShowCountryChanged)} className="text-xs font-medium bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-3 py-2 transition-colors disabled:opacity-50 tap-highlight shadow-sm">
                   {updatingCountry ? 'Guardando...' : 'Guardar'}
-                </button>
+                </motion.button>
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showCountry}
-                  onChange={e => setShowCountry(e.target.checked)}
-                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
-                />
-                <span className="text-sm text-zinc-400">Mostrar país en el perfil</span>
+                <input type="checkbox" checked={showCountry} onChange={e => setShowCountry(e.target.checked)} className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]" />
+                <span className="text-sm text-zinc-400 tracking-[-0.011em]">Mostrar país en el perfil</span>
               </label>
             </div>
 
             <div className="w-full max-w-sm space-y-2">
-              <label className="text-sm text-zinc-500">Privacidad</label>
+              <label className="text-sm text-zinc-500 tracking-[-0.011em]">Privacidad</label>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showActivity}
-                  onChange={e => setShowActivity(e.target.checked)}
-                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]"
-                />
-                <span className="text-sm text-zinc-400">Mostrar actividad a mis amigos</span>
-                <button
-                  onClick={handleSaveActivity}
-                  disabled={updatingActivity || showActivity === initialActivity}
-                  className="ml-auto text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 py-1.5 transition disabled:opacity-50"
-                >
+                <input type="checkbox" checked={showActivity} onChange={e => setShowActivity(e.target.checked)} className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-accent focus:ring-accent focus:ring-offset-0 [color-scheme:dark]" />
+                <span className="text-sm text-zinc-400 tracking-[-0.011em]">Mostrar actividad a mis amigos</span>
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleSaveActivity} disabled={updatingActivity || showActivity === initialActivity} className="ml-auto text-xs font-medium bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-3 py-1.5 transition-colors disabled:opacity-50 tap-highlight shadow-sm">
                   {updatingActivity ? 'Guardando...' : 'Guardar'}
-                </button>
+                </motion.button>
               </label>
             </div>
 
-            <div className="w-full max-w-sm pt-4 border-t border-zinc-800 lg:border-t-0">
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="w-full text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg px-3 py-2 transition"
-              >
+            <div className="w-full max-w-sm pt-4 border-t border-white/[0.06] lg:border-t-0">
+              <motion.button whileTap={{ scale: 0.98 }} onClick={() => setShowDeleteConfirm(true)} className="w-full text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl px-3 py-2.5 transition-colors shadow-sm tap-highlight">
                 Eliminar perfil
-              </button>
+              </motion.button>
             </div>
           </div>
         </div>
@@ -591,24 +536,18 @@ export default function EditProfile() {
         )}
 
         {showDeleteConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60">
-            <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center space-y-4">
-              <p className="text-sm text-zinc-300">
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60 backdrop-blur-[6px]">
+            <div className="w-full max-w-sm bg-zinc-900/90 backdrop-blur-[20px] border border-white/[0.08] rounded-[1.25rem] p-6 text-center space-y-4 shadow-[0_24px_64px_rgba(0,0,0,0.5)]">
+              <p className="text-sm text-zinc-300 tracking-[-0.011em]">
                 Para eliminar tu perfil necesitamos que inicies sesión con Google para confirmar tu identidad.
               </p>
               <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="text-sm text-zinc-500 hover:text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-4 py-2 transition"
-                >
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => setShowDeleteConfirm(false)} className="text-sm font-medium text-zinc-400 hover:text-zinc-200 bg-white/[0.08] hover:bg-white/[0.12] rounded-xl px-4 py-2 transition-colors tap-highlight">
                   Cancelar
-                </button>
-                <button
-                  onClick={handleDeleteAccount}
-                  className="text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg px-4 py-2 transition"
-                >
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleDeleteAccount} className="text-sm font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl px-4 py-2 transition-colors shadow-sm tap-highlight">
                   Iniciar sesión con Google
-                </button>
+                </motion.button>
               </div>
             </div>
           </div>
@@ -616,7 +555,7 @@ export default function EditProfile() {
 
         {error && (
           <div className="mt-6 text-center">
-            <p className="text-red-400 text-sm">{error}</p>
+            <p className="text-red-400 text-sm tracking-[-0.011em]">{error}</p>
           </div>
         )}
       </div>

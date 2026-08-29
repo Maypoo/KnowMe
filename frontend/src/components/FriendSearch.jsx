@@ -46,7 +46,7 @@ export default function FriendSearch() {
 
   return (
     <div>
-      <h2 className="text-center text-zinc-300 text-lg font-semibold mb-3">Agregar un amigo</h2>
+      <h2 className="text-center text-zinc-200 text-[17px] font-semibold tracking-[-0.015em] mb-3">Agregar un amigo</h2>
       <form onSubmit={handleSubmit} className="flex gap-2">
         <div className="relative flex-1">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none select-none text-sm">@</span>
@@ -54,13 +54,13 @@ export default function FriendSearch() {
             type="text"
             value={username}
             onChange={handleChange}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-zinc-600 transition"
+            className="w-full bg-zinc-800/80 border border-white/[0.06] rounded-xl pl-8 pr-3 py-2.5 text-zinc-100 placeholder-zinc-500 text-[15px] tracking-[-0.011em] focus:outline-none focus:border-[var(--color-accent)]/30 transition-colors"
             autoFocus
           />
         </div>
         <button
           type="submit"
-          className="rounded-lg px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+          className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90 shadow-sm tap-highlight"
           style={{ backgroundColor: 'var(--color-accent)' }}
         >
           Agregar

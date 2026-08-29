@@ -601,12 +601,12 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
       )}
 
       {editingMsgId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={handleCancelEdit} data-edit-modal>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-center p-4 border-b border-zinc-800 relative">
-              <h2 className="text-zinc-100 font-semibold text-lg">Editar mensaje</h2>
-              <button onClick={handleCancelEdit} className="absolute right-4 text-zinc-400 hover:text-zinc-200 transition p-1">
-                <X size={20} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[6px] px-4" onClick={handleCancelEdit} data-edit-modal>
+          <div className="bg-zinc-900/90 backdrop-blur-[20px] border border-white/[0.08] rounded-[1.25rem] w-full max-w-md shadow-[0_24px_64px_rgba(0,0,0,0.5)] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-center p-4 border-b border-white/[0.06] relative">
+              <h2 className="text-zinc-100 font-semibold text-[17px] tracking-[-0.015em]">Editar mensaje</h2>
+              <button onClick={handleCancelEdit} className="absolute right-3 w-8 h-8 rounded-full bg-white/[0.08] flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors">
+                <X size={16} />
               </button>
             </div>
             <div className="p-4">
@@ -617,15 +617,14 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
                 onKeyDown={handleEditKeyDown}
                 maxLength={300}
                 autoFocus
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100 text-sm outline-none focus:border-zinc-500 transition"
+                className="w-full bg-zinc-800/80 border border-white/[0.06] rounded-xl px-4 py-2.5 text-zinc-100 text-sm tracking-[-0.011em] outline-none focus:border-[var(--color-accent)]/30 transition-colors"
               />
             </div>
             <div className="flex justify-center pb-4 px-4">
               <button
                 onClick={handleSaveEdit}
                 disabled={!editContent.trim() || editContent.trim() === messages.find(m => m.id === editingMsgId)?.content || editMutation.isPending}
-                className="px-4 py-2 rounded-lg text-sm text-white transition hover:opacity-90 disabled:opacity-40"
-                style={{ backgroundColor: 'var(--color-accent)' }}
+                className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-40 shadow-sm tap-highlight"
               >
                 Guardar
               </button>
@@ -666,13 +665,12 @@ export default function ChatConversation({ chat, onBack, profile, onStartCall, i
             onKeyDown={handleKeyDown}
             placeholder="Escribí un mensaje..."
             maxLength={300}
-            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-full px-4 py-2.5 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-zinc-600 transition"
+            className="flex-1 bg-zinc-900/80 backdrop-blur-sm border border-white/[0.06] rounded-full px-4 py-2.5 text-zinc-100 placeholder-zinc-500 text-[15px] tracking-[-0.011em] focus:outline-none focus:border-[var(--color-accent)]/30 focus:bg-zinc-900 transition-colors"
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || sendMutation.isPending}
-            className="rounded-full p-2.5 transition disabled:opacity-40"
-            style={{ backgroundColor: 'var(--color-accent)' }}
+            className="rounded-full p-2.5 bg-[var(--color-accent)] text-white shadow-sm transition disabled:opacity-40 active:scale-95 tap-highlight will-change-transform"
           >
             <Send size={18} />
           </button>

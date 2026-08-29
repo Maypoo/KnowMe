@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
+import { spring } from '../lib/motion'
 import { useOnlineUsers } from '../lib/OnlineUsersContext'
 import { timeAgo } from '../lib/timeAgo'
 import Avatar from './Avatar'
@@ -29,79 +31,49 @@ export default function FriendsList() {
       const res = await api(`/api/friends/${friend.id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Error al eliminar amigo')
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['friends'] })
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['friends'] }),
   })
 
   const handleRemove = () => {
     if (!confirming) return
-    removeMutation.mutate(confirming, {
-      onSettled: () => setConfirming(null),
-    })
+    removeMutation.mutate(confirming, { onSettled: () => setConfirming(null) })
   }
 
-  const filtered = search.trim()
-    ? friends.filter(f => f.username.toLowerCase().includes(search.trim().toLowerCase()))
-    : friends
-
+  const filtered = search.trim() ? friends.filter(f => f.username.toLowerCase().includes(search.trim().toLowerCase())) : friends
   const onlineFriends = filtered.filter(f => isOnline(f.id))
   const offlineFriends = filtered.filter(f => !isOnline(f.id))
-
   const hasFriends = friends.length > 0
   const showList = hasFriends && filtered.length > 0
 
   const renderFriend = (f) => (
-    <li key={f.id} className="bg-zinc-900 rounded-lg px-4 py-3 flex items-center justify-between">
-      <button onClick={() => navigate(`/${f.username}`)} className="flex items-center gap-3 hover:opacity-80 transition">
+    <li key={f.id} className="material-thin rounded-2xl px-4 py-3 flex items-center justify-between">
+      <motion.button whileTap={{ scale: 0.98 }} onClick={() => navigate(`/${f.username}`)} className="flex items-center gap-3 tap-highlight text-left">
         <div className="relative">
           <Avatar src={f.avatar_url} size={32} />
-          {isOnline(f.id) ? (
-            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-zinc-900" />
-          ) : f.last_seen_at ? (
-            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-zinc-600 ring-2 ring-zinc-900" />
-          ) : null}
+          {isOnline(f.id) ? <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-zinc-900" /> : f.last_seen_at ? <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-zinc-600 ring-2 ring-zinc-900" /> : null}
         </div>
         <div className="flex flex-col items-start">
-          <span className="text-zinc-100 text-sm">{f.username}</span>
-          {isOnline(f.id) ? (
-            <span className="text-green-500 text-xs">En línea</span>
-          ) : f.last_seen_at ? (
-            <span className="text-zinc-500 text-xs">Conectado {timeAgo(f.last_seen_at)}</span>
-          ) : null}
+          <span className="text-zinc-100 text-sm font-medium tracking-[-0.011em]">{f.username}</span>
+          {isOnline(f.id) ? <span className="text-green-500 text-xs">En línea</span> : f.last_seen_at ? <span className="text-zinc-500 text-xs">Conectado {timeAgo(f.last_seen_at)}</span> : null}
         </div>
-      </button>
-      <button
-        onClick={() => setConfirming(f)}
-        className="text-zinc-600 hover:text-red-400 transition"
-      >
-        <X size={18} />
-      </button>
+      </motion.button>
+      <motion.button whileTap={{ scale: 0.9 }} onClick={() => setConfirming(f)} className="w-7 h-7 rounded-full bg-white/[0.06] flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-white/[0.08] transition-colors tap-highlight"><X size={14} /></motion.button>
     </li>
   )
 
   return (
     <div className={showList || isLoading ? '' : 'flex-1 flex flex-col'}>
-      <h2 className="text-center text-zinc-300 text-lg font-semibold mb-3">Buscar</h2>
+      <h2 className="text-center text-zinc-200 text-[17px] font-semibold tracking-[-0.015em] mb-3">Buscar</h2>
       <div className="mb-4">
-        <input
-          type="text"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar amigos..."
-          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-zinc-600 transition"
-        />
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar amigos..." className="w-full bg-zinc-800/80 border border-white/[0.06] rounded-xl px-3.5 py-2.5 text-zinc-100 placeholder-zinc-500 text-sm tracking-[-0.011em] focus:outline-none focus:border-[var(--color-accent)]/30 transition-colors" />
       </div>
       {isLoading ? (
         <>
-          <h3 className="text-zinc-400 text-sm font-medium mb-3">Amigos</h3>
-          <ul className="space-y-1">
+          <h3 className="text-zinc-400 text-xs font-semibold tracking-[0.04em] uppercase mb-3">Amigos</h3>
+          <ul className="space-y-1.5">
             {[1,2,3,4,5].map(i => (
-              <li key={i} className="bg-zinc-900 rounded-lg px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <SkeletonAvatar size={32} />
-                  <SkeletonBox className="h-4 w-24" />
-                </div>
+              <li key={i} className="material-thin rounded-2xl px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3"><SkeletonAvatar size={32} /><SkeletonBox className="h-4 w-24" /></div>
                 <SkeletonBox className="h-4 w-4" />
               </li>
             ))}
@@ -111,58 +83,35 @@ export default function FriendsList() {
         <>
           {onlineFriends.length > 0 && (
             <>
-              <h3 className="text-zinc-400 text-sm font-medium mb-3">Conectado</h3>
-              <ul className="space-y-1 mb-4">
-                {onlineFriends.map(renderFriend)}
-              </ul>
+              <h3 className="text-zinc-500 text-xs font-semibold tracking-[0.04em] uppercase mb-3">Conectado</h3>
+              <ul className="space-y-1.5 mb-4">{onlineFriends.map(renderFriend)}</ul>
             </>
           )}
           {offlineFriends.length > 0 && (
             <>
-              <h3 className="text-zinc-400 text-sm font-medium mb-3">Amigos</h3>
-              <ul className="space-y-1">
-                {offlineFriends.map(renderFriend)}
-              </ul>
+              <h3 className="text-zinc-500 text-xs font-semibold tracking-[0.04em] uppercase mb-3">Amigos</h3>
+              <ul className="space-y-1.5">{offlineFriends.map(renderFriend)}</ul>
             </>
           )}
-          {filtered.length === 0 && (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-zinc-600 text-sm">No se encontraron amigos.</p>
-            </div>
-          )}
+          {filtered.length === 0 && <div className="flex-1 flex items-center justify-center"><p className="text-zinc-500 text-sm">No se encontraron amigos.</p></div>}
         </>
       )}
-      {!isLoading && !hasFriends && (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-zinc-600 text-sm">No hay nadie por aca.</p>
-        </div>
-      )}
+      {!isLoading && !hasFriends && <div className="flex-1 flex items-center justify-center"><p className="text-zinc-500 text-sm">No hay nadie por aca.</p></div>}
 
-      {confirming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setConfirming(null)} />
-          <div className="relative bg-zinc-900 rounded-xl px-6 py-5 w-full max-w-xs">
-            <p className="text-zinc-100 text-sm mb-4">
-              ¿Eliminar a {confirming.username} de tus amigos?
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setConfirming(null)}
-                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-4 py-2 text-sm transition"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleRemove}
-                disabled={removeMutation.isPending}
-                className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm transition disabled:opacity-50"
-              >
-                {removeMutation.isPending ? 'Eliminando...' : 'Eliminar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {confirming && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setConfirming(null)}>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/60 backdrop-blur-[6px]" />
+            <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: 8 }} transition={spring.default} className="relative bg-zinc-900/90 backdrop-blur-[20px] border border-white/[0.08] rounded-2xl px-6 py-5 w-full max-w-xs shadow-[0_24px_64px_rgba(0,0,0,0.5)] will-change-transform" onClick={e => e.stopPropagation()}>
+              <p className="text-zinc-100 text-sm tracking-[-0.011em] mb-4">¿Eliminar a {confirming.username} de tus amigos?</p>
+              <div className="flex gap-2 justify-end">
+                <motion.button whileTap={{ scale: 0.97 }} onClick={() => setConfirming(null)} className="bg-white/[0.08] hover:bg-white/[0.12] text-zinc-300 rounded-xl px-4 py-2 text-sm font-medium transition-colors">Cancelar</motion.button>
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handleRemove} disabled={removeMutation.isPending} className="bg-red-500 hover:bg-red-600 text-white rounded-xl px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 shadow-sm">{removeMutation.isPending ? 'Eliminando...' : 'Eliminar'}</motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
