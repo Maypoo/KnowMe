@@ -1,7 +1,9 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
+import { enterDemo } from './lib/demo'
 import { OnlineUsersProvider } from './lib/OnlineUsersContext'
 import { TitleBarProvider } from './lib/TitleBarContext'
 import TitleBar from './components/TitleBar'
@@ -30,22 +32,34 @@ function NotFound() {
   )
 }
 
+function DemoGate({ children }) {
+  useEffect(() => {
+    queryClient.clear()
+    enterDemo()
+  }, [])
+  return children
+}
+
 export default function App() {
   const location = useLocation()
   const isLogin = location.pathname === '/login'
+  const isDemo = location.pathname === '/demo' || location.pathname.startsWith('/demo/')
 
   return (
     <QueryClientProvider client={queryClient}>
       <OnlineUsersProvider>
         <TitleBarProvider>
           <div className="relative h-screen flex flex-col overscroll-none">
-            <div className={isLogin ? 'absolute inset-x-0 top-0 z-20' : 'shrink-0'}>
+            <div className={isLogin || isDemo ? 'absolute inset-x-0 top-0 z-20' : 'shrink-0'}>
               <TitleBar />
             </div>
             <main className="flex-1 min-h-0">
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/demo" element={<DemoGate><Home /></DemoGate>} />
+                <Route path="/demo/profile/edit" element={<DemoGate><EditProfile /></DemoGate>} />
+                <Route path="/demo/:username" element={<DemoGate><PublicProfile /></DemoGate>} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/setup-username" element={<SetupUsername />} />
                 <Route path="/profile/edit" element={<EditProfile />} />

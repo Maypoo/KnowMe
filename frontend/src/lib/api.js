@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+import { isDemoRoute } from './demo'
+import { handleDemoRequest } from './demoApi'
 
 const BASE_URL = import.meta.env.VITE_API_URL || ''
 const AUTH_TOKEN_KEY = 'knowme_auth_token'
@@ -59,6 +61,9 @@ async function refreshAuthToken() {
 }
 
 export async function api(path, options = {}) {
+  if (isDemoRoute() && path.startsWith('/api/')) {
+    return handleDemoRequest(path, options)
+  }
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,

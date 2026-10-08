@@ -17,8 +17,8 @@ export default function MobileNav({
   ]
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 flex justify-center pb-4 lg:hidden z-30 pointer-events-none">
-      <div className="pointer-events-auto material-thick rounded-[1.75rem] px-2 py-2 flex items-center gap-1 mx-3 w-full max-w-sm shadow-[0_16px_40px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.08)_inset]">
+    <div className="fixed bottom-0 left-6 right-6 flex justify-center pb-4 lg:hidden z-30 pointer-events-none">
+      <div className="pointer-events-auto material-thick rounded-[1.75rem] px-2 py-2 flex items-center gap-1 w-full shadow-[0_16px_40px_rgba(0,0,0,0.5),0_1px_0_rgba(255,255,255,0.08)_inset]">
         {items.map(item => {
           const isActive = view === item.key
           const Icon = item.icon
@@ -41,11 +41,13 @@ export default function MobileNav({
               key={item.key}
               onClick={item.action}
               whileTap={{ scale: 0.9 }}
-              className={`relative flex-1 flex items-center justify-center py-2.5 rounded-full tap-highlight ${isActive ? 'text-zinc-100' : 'text-zinc-400'}`}
+              className={`relative flex-1 flex items-center justify-center py-2.5 tap-highlight group ${isActive ? 'text-zinc-100' : 'text-zinc-400'}`}
               style={{ WebkitTapHighlightColor: 'transparent' }}
             >
-              {isActive && (
-                <motion.div layoutId="mobile-active" transition={spring.snappy} className="absolute inset-0 rounded-full bg-white/[0.08] border border-white/[0.06]" />
+              {isActive ? (
+                <motion.div layoutId="mobile-active" transition={spring.snappy} className="absolute inset-0 m-auto w-11 h-11 rounded-full bg-white/[0.08] border border-white/[0.06]" />
+              ) : (
+                <span className="absolute inset-0 m-auto w-11 h-11 rounded-full bg-white/[0.06] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
               )}
               <span className="relative">
                 <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />

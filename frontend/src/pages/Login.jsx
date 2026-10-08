@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Download, Users, MessageCircleMore, Earth } from 'lucide-react'
 import { isTauri } from '@tauri-apps/api/core'
 import { api, setAuthToken, clearAuthToken } from '../lib/api'
+import { exitDemo } from '../lib/demo'
 import { startOAuth, onOAuthTokens } from '../lib/oauth'
 import Logo from '../components/Logo'
 
@@ -19,6 +20,7 @@ export default function Login() {
   const deleted = location.state?.deleted
 
   useEffect(() => {
+    exitDemo()
     clearAuthToken()
   }, [])
 

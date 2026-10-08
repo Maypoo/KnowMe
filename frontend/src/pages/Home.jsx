@@ -5,6 +5,7 @@ import { Search, Settings2, Plus } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { api } from '../lib/api'
 import { socket } from '../lib/socket'
+import { isDemoRoute, exitDemo, goToRealLogin } from '../lib/demo'
 import { useTitleBar } from '../lib/TitleBarContext'
 import { spring } from '../lib/motion'
 import Avatar from '../components/Avatar'
@@ -384,6 +385,12 @@ export default function Home() {
   }, [view, tab, activeChat, chatsView, profile])
 
   const handleLogout = async () => {
+    if (isDemoRoute()) {
+      exitDemo()
+      queryClient.clear()
+      goToRealLogin()
+      return
+    }
     if (socket.connected) {
       socket.disconnect()
     }
