@@ -5,6 +5,11 @@ import { handleDemoRequest } from './demoApi'
 const BASE_URL = import.meta.env.VITE_API_URL || ''
 const AUTH_TOKEN_KEY = 'knowme_auth_token'
 const REFRESH_TOKEN_KEY = 'knowme_refresh_token'
+const DEMO_FAKE_DELAY_MS = 1200
+
+function demoFakeDelay() {
+  return new Promise((resolve) => setTimeout(resolve, DEMO_FAKE_DELAY_MS))
+}
 
 function resolveUrl(path) {
   if (!BASE_URL) return path
@@ -62,6 +67,7 @@ async function refreshAuthToken() {
 
 export async function api(path, options = {}) {
   if (isDemoRoute() && path.startsWith('/api/')) {
+    await demoFakeDelay()
     return handleDemoRequest(path, options)
   }
   const headers = {
